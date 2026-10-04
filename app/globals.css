@@ -1,0 +1,772 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --background: 220 27% 97%;
+    --foreground: 222 31% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 31% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 31% 12%;
+
+    --primary-light: 221 83% 53%;
+    --primary-light-foreground: 0 0% 100%;
+    --accent-light: 218 46% 94%;
+    --ring-light: 221 83% 53%;
+    --primary-dark: 217 91% 60%;
+    --primary-dark-foreground: 0 0% 100%;
+    --accent-dark: 218 25% 18%;
+    --ring-dark: 217 91% 60%;
+
+    --dark-background: 222 34% 7%;
+    --dark-card: 222 27% 10.5%;
+    --dark-popover: 222 24% 12%;
+    --dark-secondary: 220 20% 16%;
+    --dark-muted: 220 20% 15%;
+    --dark-border: 220 18% 21%;
+    --dark-input: 220 18% 24%;
+
+    --primary: var(--primary-light);
+    --primary-foreground: var(--primary-light-foreground);
+    --secondary: 220 20% 94%;
+    --secondary-foreground: 222 27% 17%;
+    --muted: 220 20% 94%;
+    --muted-foreground: 218 12% 43%;
+    --accent: var(--accent-light);
+    --accent-foreground: 222 31% 15%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 17% 86%;
+    --input: 220 16% 80%;
+    --ring: var(--ring-light);
+    /* Geometry scale: controls 12px, surfaces 16px, overlays 20px. */
+    --radius: 0.75rem;
+
+    --board-todo-color: 215 16% 47%;
+    --board-in-progress-color: 217 91% 60%;
+    --board-done-color: 160 84% 39%;
+    --status-danger: 0 72% 51%;
+    --status-warning: 27 91% 48%;
+    --status-caution: 43 96% 44%;
+    --status-info: 217 91% 56%;
+    --status-success: 160 72% 36%;
+    --status-danger-soft: 0 86% 96%;
+    --status-warning-soft: 35 95% 94%;
+    --status-info-soft: 216 92% 95%;
+    --status-success-soft: 155 70% 94%;
+    --status-danger-hover-soft: 0 84% 93%;
+    --calendar-sunday-foreground: 0 68% 47%;
+    --calendar-sunday-background: 0 86% 96%;
+    --event-default: 217 91% 56%;
+    --scrollbar-thumb: 220 12% 72%;
+    --scrollbar-thumb-hover: 220 12% 57%;
+
+    --shadow-panel: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px rgb(15 23 42 / 0.045);
+    --shadow-floating: 0 20px 60px rgb(15 23 42 / 0.18), 0 2px 8px rgb(15 23 42 / 0.08);
+  }
+
+  .dark {
+    color-scheme: dark;
+    --background: var(--dark-background);
+    --foreground: 214 28% 95%;
+    --card: var(--dark-card);
+    --card-foreground: 214 28% 95%;
+    --popover: var(--dark-popover);
+    --popover-foreground: 214 28% 95%;
+    --primary: var(--primary-dark);
+    --primary-foreground: var(--primary-dark-foreground);
+    --secondary: var(--dark-secondary);
+    --secondary-foreground: 214 28% 94%;
+    --muted: var(--dark-muted);
+    --muted-foreground: 216 14% 67%;
+    --accent: var(--accent-dark);
+    --accent-foreground: 214 28% 96%;
+    --destructive: 0 68% 53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: var(--dark-border);
+    --input: var(--dark-input);
+    --ring: var(--ring-dark);
+    --status-danger: 0 78% 62%;
+    --status-warning: 28 93% 58%;
+    --status-caution: 44 92% 57%;
+    --status-info: 216 92% 65%;
+    --status-success: 158 67% 49%;
+    --status-danger-soft: 0 34% 15%;
+    --status-warning-soft: 31 33% 16%;
+    --status-info-soft: 219 36% 17%;
+    --status-success-soft: 158 32% 15%;
+    --status-danger-hover-soft: 0 38% 19%;
+    --calendar-sunday-background: 0 30% 13%;
+    --scrollbar-thumb: 220 12% 31%;
+    --scrollbar-thumb-hover: 220 12% 42%;
+    --shadow-panel: 0 1px 1px rgb(0 0 0 / 0.22), 0 16px 40px rgb(0 0 0 / 0.14);
+    --shadow-floating: 0 24px 72px rgb(0 0 0 / 0.5), 0 2px 10px rgb(0 0 0 / 0.35);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 8% 0%, hsl(var(--primary) / 0.055), transparent 28rem),
+      linear-gradient(to bottom, hsl(var(--background)), hsl(var(--background)));
+    background-attachment: fixed;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display;
+    letter-spacing: -0.018em;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
+  select option {
+    color: hsl(var(--foreground));
+    background: hsl(var(--popover));
+  }
+
+  /* S24 Ultra / móvil táctil: dianas razonables sin inflar todo a 44px.
+     Solo icon-buttons mantienen 40px; el resto usa su altura natural (h-8/h-9). */
+  @media (pointer: coarse) {
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .workspace-container {
+    @apply mx-auto w-full max-w-[2200px] px-3 sm:px-6;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90;
+  }
+
+  /* Compatibility names. These are deliberate opaque surfaces, not glassmorphism. */
+  .glass {
+    @apply border border-border/80 bg-card/95;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .glass-card {
+    @apply border border-border/80 bg-card;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .glass-input {
+    @apply border-input bg-background/65 transition-colors duration-150 focus:bg-background;
+  }
+
+  .task-card {
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+    transition: border-color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
+  }
+
+  .task-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgb(15 23 42 / 0.075);
+  }
+
+  .dark .task-card:hover {
+    box-shadow: 0 12px 30px rgb(0 0 0 / 0.22);
+  }
+
+  .task-card-overdue {
+    border-color: hsl(var(--status-danger) / 0.48) !important;
+    box-shadow: inset 0 0 0 1px hsl(var(--status-danger) / 0.08), 0 1px 2px rgb(15 23 42 / 0.04);
+  }
+
+  .task-card-overdue:hover {
+    border-color: hsl(var(--status-danger) / 0.68) !important;
+    box-shadow: inset 0 0 0 1px hsl(var(--status-danger) / 0.1), 0 10px 24px rgb(15 23 42 / 0.075);
+  }
+
+  .task-card-due-today {
+    border-color: hsl(var(--status-warning) / 0.52) !important;
+    box-shadow: inset 0 0 0 1px hsl(var(--status-warning) / 0.08), 0 1px 2px rgb(15 23 42 / 0.04);
+  }
+
+  .task-column {
+    @apply flex w-full flex-col;
+    --column-surface: color-mix(in srgb, hsl(var(--muted)) 25%, hsl(var(--background)));
+    --column-fade-height: 12px;
+  }
+
+  .task-column-header {
+    background-color: var(--column-surface);
+  }
+
+  .task-column-fade {
+    position: absolute;
+    inset: 100% 0 auto;
+    z-index: 1;
+    height: var(--column-fade-height);
+    pointer-events: none;
+  }
+
+  .task-column-fade::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom,
+      var(--column-surface) 0%,
+      color-mix(in srgb, var(--column-surface) 95%, transparent) 18%,
+      color-mix(in srgb, var(--column-surface) 65%, transparent) 42%,
+      color-mix(in srgb, var(--column-surface) 25%, transparent) 68%,
+      transparent 100%);
+  }
+
+  .task-column > .task-column-scroll {
+    /* Keep the first card below the fade at scrollTop 0, including its hover lift. */
+    padding-top: calc(var(--column-fade-height) + 3px);
+  }
+
+  .task-drag-active,
+  .task-drag-active * {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
+  .task-drag-active .task-card:hover {
+    transform: none;
+  }
+
+  .task-card[data-dragging="true"] {
+    background: hsl(var(--primary) / 0.045);
+    border: 1px dashed hsl(var(--primary) / 0.4) !important;
+    box-shadow: none !important;
+    opacity: 1;
+  }
+
+  .task-card[data-dragging="true"] > * {
+    visibility: hidden;
+  }
+
+  .task-card[data-drag-landing="true"] {
+    visibility: hidden;
+  }
+
+  .task-card[data-drop-placement]::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 999px;
+    background: hsl(var(--primary));
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+    pointer-events: none;
+  }
+
+  .task-card[data-drop-placement="before"]::before { top: -8px; }
+  .task-card[data-drop-placement="after"]::before { bottom: -8px; }
+
+  .task-drag-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    pointer-events: none;
+    transform-origin: top left;
+    will-change: transform;
+  }
+
+  .task-drag-layer .task-drag-preview {
+    opacity: 1;
+    background: hsl(var(--card)) !important;
+    transition: none;
+    margin: 0;
+    box-shadow: 0 16px 40px rgb(0 0 0 / 0.2), 0 3px 8px rgb(0 0 0 / 0.1);
+  }
+
+  .task-card[data-drag-press="true"] {
+    animation: task-press 320ms ease-out both;
+  }
+
+  @keyframes task-press {
+    to { box-shadow: 0 0 0 2px hsl(var(--primary) / 0.4); }
+  }
+
+  .task-touch-drag-active .task-column-scroll {
+    padding-bottom: 72px;
+    scroll-behavior: auto;
+    overflow-anchor: none;
+  }
+
+  .task-column-scroll[data-drag-scroll="up"] {
+    box-shadow: inset 0 14px 14px -14px hsl(var(--primary) / 0.32);
+  }
+
+  .task-column-scroll[data-drag-scroll="down"] {
+    box-shadow: inset 0 -14px 14px -14px hsl(var(--primary) / 0.32);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .task-card[data-drag-press="true"], .mobile-column-dwell-progress { animation: none; }
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-content] {
+    padding: 6px 12px !important;
+  }
+
+  .task-drag-layer .task-drag-preview-compact {
+    height: 100% !important;
+    overflow: hidden;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-content] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 2px;
+    height: 100%;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-summary] {
+    width: 100%;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-summary] h3 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-tags],
+  .task-drag-layer .task-drag-preview-compact [data-task-card-detail] {
+    display: none !important;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-subtitle] {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-subtitle] > p {
+    margin: 0 !important;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-steps] {
+    margin-top: 0 !important;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-checklist] {
+    display: none !important;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-progress] {
+    gap: 6px;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-progress] [role="progressbar"] {
+    height: 3px;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-progress] button {
+    min-height: 16px;
+    height: 16px;
+    padding: 0;
+    font-size: 10px;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-progress] button svg {
+    display: none;
+  }
+
+  .task-drag-layer .task-drag-preview-compact [data-task-card-priority] button {
+    width: 32px !important;
+    height: 28px !important;
+  }
+
+  .calendar-event-drag-active,
+  .calendar-event-drag-active * {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
+  .calendar-event-drag-active .calendar-event:hover {
+    transform: none;
+  }
+
+  .calendar-event-drag-surface[data-calendar-dragging="true"] {
+    border: 1px dashed hsl(var(--primary) / 0.48) !important;
+    background: hsl(var(--primary) / 0.06) !important;
+    box-shadow: none !important;
+    opacity: 1;
+  }
+
+  .calendar-event-drag-surface[data-calendar-dragging="true"] > * {
+    visibility: hidden;
+  }
+
+  .calendar-event-drag-surface[data-calendar-drag-landing="true"] {
+    visibility: hidden;
+  }
+
+  .calendar-event-drag-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    pointer-events: none;
+    transform-origin: top left;
+    will-change: transform;
+  }
+
+  .calendar-event-drag-layer .calendar-event-drag-preview {
+    opacity: 1 !important;
+    transition: none !important;
+    margin: 0;
+    border-radius: 10px !important;
+  }
+
+  .mobile-column-dwell-progress {
+    animation: mobile-column-dwell linear forwards;
+    transform: scaleX(0);
+  }
+
+  @keyframes mobile-column-dwell {
+    to { transform: scaleX(1); }
+  }
+
+  .task-drag-surface {
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
+    cursor: grab;
+  }
+
+  .task-card[data-task-drag-surface="true"] {
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
+  }
+
+  @media (pointer: coarse) {
+    .task-card[data-task-drag-surface="true"],
+    .task-card[data-task-drag-surface="true"] * {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  }
+
+  .task-drag-surface,
+  .task-drag-surface * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .task-drag-surface:active {
+    cursor: grabbing;
+  }
+
+  .task-card-actions {
+    opacity: 0.85;
+    transition: opacity 150ms ease;
+  }
+
+  .task-card:hover .task-card-actions,
+  .task-card:focus-within .task-card-actions {
+    opacity: 1;
+  }
+
+  .task-card [role="progressbar"] {
+    background: hsl(var(--muted));
+  }
+
+  .task-card a {
+    cursor: pointer;
+  }
+
+  .card-hover-effect {
+    @apply transition-[border-color,background-color,box-shadow,transform] duration-150 hover:-translate-y-px;
+  }
+
+  .calendar-grid {
+    @apply grid w-full grid-cols-7 gap-px;
+  }
+
+  .calendar-day-header {
+    @apply select-none px-1 py-2.5 text-center text-[0.7rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground;
+  }
+
+  .calendar-day-modern {
+    @apply min-h-[120px] select-none border-0 bg-card p-2 transition-colors duration-150 hover:bg-accent/35;
+  }
+
+  .calendar-sunday {
+    background: hsl(var(--calendar-sunday-background) / 0.16);
+  }
+
+  .today {
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.65);
+    background: hsl(var(--primary) / 0.055);
+  }
+
+  .calendar-event {
+    @apply select-none truncate rounded-md px-2 py-1 text-xs font-medium transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-sm;
+  }
+
+  .calendar-mobile-event-pill {
+    @apply flex w-full items-center gap-1 rounded-md border px-1 py-0.5 text-left text-[10px] leading-tight font-medium shadow-sm;
+  }
+
+  .calendar-event-title-fade {
+    @apply block min-w-0 flex-1 overflow-hidden whitespace-nowrap;
+    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 82%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 0%, #000 82%, transparent 100%);
+  }
+
+  .calendar-header {
+    @apply border-b border-border/70 bg-muted/25;
+  }
+
+  .calendar-event-clickable {
+    @apply transition-colors duration-150 hover:border-primary/30;
+  }
+
+  .calendar-drop-target {
+    box-shadow: inset 0 0 0 2px hsl(var(--primary) / 0.72);
+    background-color: hsl(var(--primary) / 0.09) !important;
+    transition: background-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  /* Floating Pomodoro: bottom-right on desktop, centred above the safe area on phones. */
+  .focus-timer-dock {
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  @media (max-width: 767px) {
+    .focus-timer-dock {
+      right: 0.75rem;
+      bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+  }
+
+  .filter-panel-enter {
+    animation: filter-panel-in 180ms ease-out;
+    transform-origin: top;
+  }
+
+  @keyframes filter-panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .multi-day-event {
+    @apply border border-transparent;
+  }
+
+  .multi-day-event-start {
+    @apply rounded-l-sm;
+  }
+
+  .multi-day-event-middle {
+    border-radius: 0;
+  }
+
+  .multi-day-event-end {
+    @apply rounded-r-sm;
+  }
+
+  .text-toolbar-label {
+    @apply text-sm font-medium leading-5;
+  }
+
+  .text-card-title {
+    @apply text-[0.94rem] font-semibold leading-snug tracking-[-0.01em];
+  }
+
+  .text-card-body {
+    @apply text-sm leading-6 text-muted-foreground;
+  }
+
+  .text-modal-title {
+    @apply font-display text-lg font-semibold leading-tight tracking-tight;
+  }
+
+  .text-sidebar-title {
+    @apply text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground;
+  }
+
+  .dialog-content-enhanced {
+    @apply p-4 sm:p-6;
+  }
+
+  .color-option {
+    @apply flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-[transform,box-shadow] duration-150 hover:scale-105 hover:shadow-md;
+  }
+
+  .color-option.selected {
+    @apply ring-2 ring-foreground ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  ::-webkit-scrollbar {
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: hsl(var(--scrollbar-thumb));
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--scrollbar-thumb-hover));
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"],
+  .editable-text,
+  code,
+  pre {
+    @apply select-text;
+    cursor: text;
+  }
+
+  body,
+  body * {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  button,
+  button *,
+  [role="button"],
+  [role="button"] *,
+  [role="tab"],
+  [role="tab"] * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .task-card-copyable,
+  .task-card-copyable * {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .task-card-copyable button,
+  .task-card-copyable button *,
+  .task-card-copyable [role="button"],
+  .task-card-copyable [role="button"] * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  a,
+  button,
+  [role="button"],
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  [draggable="true"] {
+    cursor: grab;
+  }
+
+  [draggable="true"]:active {
+    cursor: grabbing;
+  }
+
+  @media (pointer: coarse) {
+    .task-card-actions {
+      opacity: 1;
+    }
+  }
+
+  /* Afinado móvil ~412px (S24 Ultra): densidades y ritmos normales,
+     sin textos microscópicos ni bloques gigantes. */
+  @media (max-width: 767px) {
+    body {
+      font-size: 14px;
+    }
+
+    .calendar-day-header {
+      padding-top: 0.45rem;
+      padding-bottom: 0.45rem;
+    }
+
+    .calendar-mobile-event-pill {
+      min-height: 0;
+    }
+  }
+
+  @media (min-width: 1400px) {
+    .container {
+      @apply mx-auto max-w-7xl;
+    }
+  }
+}
+
+/* Keep mobile forms and their actions above the on-screen keyboard. */
+@media (max-width: 767px) {
+  body { min-height: var(--visible-height, 100dvh); }
+  .app-viewport { height: var(--visible-height, 100dvh); }
+  .viewport-dialog {
+    top: calc(var(--visible-top, 0px) + var(--visible-height, 100dvh) / 2);
+    max-height: calc(var(--visible-height, 100dvh) - 1.5rem);
+  }
+  .viewport-dialog > form {
+    max-height: calc(var(--visible-height, 100dvh) - 1.5rem);
+  }
+  .viewport-dialog input, .viewport-dialog textarea,
+  .app-viewport input[type="search"] { font-size: 16px; }
+  .viewport-dialog input, .viewport-dialog textarea {
+    scroll-margin-block: 1rem;
+  }
+}

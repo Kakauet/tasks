@@ -1,0 +1,38 @@
+# Dependencies
+/node_modules
+
+# Next.js builds (incluye directorios aislados vía NEXT_BUILD_DIR)
+/.next/
+/.next-*/
+/out/
+/build/
+/dist/
+
+# Capturas y salidas de los scripts de QA visual
+/artifacts/
+
+# Logs y procesos
+*.log
+*.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Variables de entorno (solo se versiona el ejemplo)
+.env*
+!.env.example
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Ajustes locales de herramientas
+.claude/settings.local.json
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
