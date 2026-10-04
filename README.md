@@ -4,7 +4,19 @@
 
 Aplicación web para gestionar tareas y eventos: tablero Kanban, calendario, etiquetas y sincronización opcional entre dispositivos. Funciona sin cuenta y guarda los datos en el propio navegador.
 
-![Tablero de TaskMaster](docs/screenshot.jpg)
+![Tablero de TaskMaster](docs/screenshots/board.jpg)
+
+<table>
+  <tr>
+    <td width="40%"><img src="docs/screenshots/calendar-month.jpg" alt="Calendario mensual"></td>
+    <td width="40%"><img src="docs/screenshots/calendar-week.jpg" alt="Calendario semanal"></td>
+    <td width="20%" rowspan="2"><img src="docs/screenshots/mobile-board.jpg" alt="Tablero en móvil"></td>
+  </tr>
+  <tr>
+    <td align="center">Calendario: vista mensual</td>
+    <td align="center">Calendario: vista semanal</td>
+  </tr>
+</table>
 
 ## Características
 
