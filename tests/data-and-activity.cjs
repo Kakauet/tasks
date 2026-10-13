@@ -130,6 +130,17 @@ test('existing local data migrates to compressed IndexedDB without losing tasks'
   assert.ok((await storedStateBytes())>0);
   assert.equal((await loadLocalState()).state.tasks[0].title,state.tasks[0].title);
 });
+test('the cloud sync base is stored with the local state it belongs to',async()=>{
+  const base={userId:'user-1',version:'2026-10-13T10:00:00.123456+00:00',state:{...empty,tasks:[task('synced')]}};
+  await saveLocalState({...empty,tasks:[task('synced'),task('pending')]},base);
+  const loaded=await loadLocalState();
+  assert.deepEqual(loaded.state.tasks.map(t=>t.id),['synced','pending']);
+  assert.equal(loaded.syncBase.userId,'user-1');
+  assert.equal(loaded.syncBase.version,base.version);
+  assert.deepEqual(loaded.syncBase.state.tasks.map(t=>t.id),['synced']);
+  await saveLocalState(state);
+  assert.equal((await loadLocalState()).syncBase,undefined);
+});
 test('recovery keeps the last three readable snapshots',async()=>{
   const db=await openLocalDatabase();
   const tx=db.transaction('recovery','readwrite');const done=transactionDone(tx);tx.objectStore('recovery').clear();await done;

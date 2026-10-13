@@ -44,12 +44,23 @@ with check (auth.uid() = user_id);
 
 ## 3) Activar Realtime para la tabla
 
-En Supabase:
+En Supabase SQL Editor, ejecuta:
 
-- `Database` -> `Replication`
-- Activa `public.user_state`
+```sql
+alter publication supabase_realtime add table public.user_state;
+```
 
-Esto permite que dos dispositivos vean cambios casi en tiempo real.
+(O en `Table Editor` → `user_state` → activa `Realtime`.)
+
+Esto permite que dos dispositivos vean cambios casi en tiempo real. Sin Realtime la sincronización sigue funcionando: la app comprueba si hay cambios cada 30 segundos, al volver a la pestaña y al recuperar la conexión.
+
+### Cómo se sincroniza
+
+- Los datos se guardan primero en el navegador; la nube se actualiza poco después de cada cambio.
+- Si dos dispositivos cambian datos a la vez, los cambios se combinan por tarea, evento y etiqueta (y por campo dentro de cada una). Solo cuando ambos cambian el mismo campo gana la edición más reciente.
+- Cada escritura comprueba que la copia de la nube no haya cambiado desde que se leyó (`updated_at`); si otro dispositivo escribió antes, se vuelve a combinar en lugar de sobrescribir.
+- Sin conexión los cambios quedan en el dispositivo y se suben al volver la conexión.
+- Si en el dispositivo había datos de otra cuenta, se guardan como copia de recuperación (`Datos y almacenamiento`) antes de cargar los de la cuenta nueva.
 
 ## 4) Activar login por email
 

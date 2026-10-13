@@ -28,7 +28,10 @@ export const safeLocalStorageSet = (key: string, value: string): boolean => {
   }
 }
 
-export interface LoadedLocalState { state: AppState; hasLocalData: boolean; savedAt?: string }
+/** The last state this device and the cloud agreed on, kept to merge later changes from both sides. */
+export interface SyncBase { userId: string; version: string | null; state: AppState }
+
+export interface LoadedLocalState { state: AppState; hasLocalData: boolean; savedAt?: string; syncBase?: SyncBase }
 
 const loadLegacyLocalState = (): LoadedLocalState => {
   const serializedState = safeLocalStorageGet(LOCAL_STATE_KEY, "")
@@ -60,7 +63,27 @@ const loadLegacyLocalState = (): LoadedLocalState => {
   return { state: createDefaultState(), hasLocalData: false }
 }
 
-interface StoredState { id: string; blob: Blob; bytes: number; savedAt: string }
+interface StoredSyncBase { userId: string; version: string | null; blob: Blob }
+// The sync base is stored in the same record as the state it belongs to, so
+// a reload (or another tab) never pairs a state with a base it did not derive from.
+interface StoredState { id: string; blob: Blob; bytes: number; savedAt: string; sync?: StoredSyncBase }
+
+const readSyncBase = async (stored?: StoredSyncBase): Promise<SyncBase | undefined> => {
+  if (!stored || typeof stored.userId !== "string" || !(stored.blob instanceof Blob)) return undefined
+  const state = repairPersistedState(await readJsonBlob(stored.blob).catch(() => null))
+  return state ? { userId: stored.userId, version: typeof stored.version === "string" ? stored.version : null, state } : undefined
+}
+
+const compressedBases = new WeakMap<SyncBase, Promise<Blob>>()
+const compressSyncBase = (base: SyncBase) => {
+  let blob = compressedBases.get(base)
+  if (!blob) {
+    blob = compressJson(base.state)
+    blob.catch(() => compressedBases.delete(base))
+    compressedBases.set(base, blob)
+  }
+  return blob
+}
 
 export async function storedStateBytes(): Promise<number> {
   const db = await openLocalDatabase()
@@ -72,11 +95,13 @@ export async function loadLocalState(): Promise<LoadedLocalState> {
   // A localStorage copy left by a failed IndexedDB write is newer than the
   // last successful database write and must win on the next startup.
   const fallback = loadLegacyLocalState()
-  if (safeLocalStorageGet(LOCAL_STATE_KEY, "")) return fallback
+  const hasFallbackCopy = !!safeLocalStorageGet(LOCAL_STATE_KEY, "")
   try {
     const db = await openLocalDatabase()
     const stored = await idbRequest<StoredState | undefined>(db.transaction("state", "readonly").objectStore("state").get("current"))
-    if (!stored) return fallback
+    // That newer copy was derived from this base or a later one, so merging it against this base stays safe.
+    const syncBase = await readSyncBase(stored?.sync).catch(() => undefined)
+    if (hasFallbackCopy || !stored) return { ...fallback, syncBase }
     const state = repairPersistedState(await readJsonBlob(stored.blob).catch(() => null))
     if (!state) {
       // Keep the unreadable copy aside: the next save would otherwise overwrite it.
@@ -86,7 +111,7 @@ export async function loadLocalState(): Promise<LoadedLocalState> {
       await done
       throw new Error("El estado local comprimido no es válido.")
     }
-    return { state, hasLocalData: true, savedAt: stored.savedAt }
+    return { state, hasLocalData: true, savedAt: stored.savedAt, syncBase }
   } catch (error) {
     console.error("Error reading compressed local state:", error)
     return fallback
@@ -94,14 +119,16 @@ export async function loadLocalState(): Promise<LoadedLocalState> {
 }
 
 let writeChain = Promise.resolve()
-export function saveLocalState(state: AppState): Promise<void> {
+export function saveLocalState(state: AppState, syncBase?: SyncBase | null): Promise<void> {
   const write = async () => {
     try {
       const blob = await compressJson(state)
+      const sync = syncBase ? { userId: syncBase.userId, version: syncBase.version, blob: await compressSyncBase(syncBase) } : undefined
       const db = await openLocalDatabase()
       const tx = db.transaction("state", "readwrite")
       const done = transactionDone(tx)
-      tx.objectStore("state").put({ id: "current", blob, bytes: blob.size, savedAt: new Date().toISOString() } satisfies StoredState)
+      const bytes = blob.size + (sync?.blob.size ?? 0)
+      tx.objectStore("state").put({ id: "current", blob, bytes, savedAt: new Date().toISOString(), sync } satisfies StoredState)
       await done
       localStorage.removeItem(LOCAL_STATE_KEY)
     } catch (error) {

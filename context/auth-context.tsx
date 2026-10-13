@@ -2,7 +2,7 @@
 
 import { checkSupabaseConnection, getSupabaseBrowserClient } from "@/lib/supabase-browser"
 import type { Session, SupabaseClient, User } from "@supabase/supabase-js"
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 interface AuthContextType {
   user: User | null
@@ -26,6 +26,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [cloudStatus, setCloudStatus] = useState<AuthContextType["cloudStatus"]>(supabase ? "checking" : "unconfigured")
   const [cloudError, setCloudError] = useState<string | null>(null)
+  const cloudStatusRef = useRef(cloudStatus)
+  cloudStatusRef.current = cloudStatus
 
   const retryCloudConnection = useCallback(async () => {
     if (!supabase) {
@@ -41,6 +43,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCloudError(result.error ?? null)
     return result.ok
   }, [supabase])
+
+  // A device that started offline connects on its own once the network is back.
+  useEffect(() => {
+    if (!supabase) return
+    const reconnect = () => {
+      if (cloudStatusRef.current === "unavailable") void retryCloudConnection()
+    }
+    const reconnectWhenVisible = () => {
+      if (document.visibilityState === "visible") reconnect()
+    }
+    window.addEventListener("online", reconnect)
+    document.addEventListener("visibilitychange", reconnectWhenVisible)
+    return () => {
+      window.removeEventListener("online", reconnect)
+      document.removeEventListener("visibilitychange", reconnectWhenVisible)
+    }
+  }, [supabase, retryCloudConnection])
 
   useEffect(() => {
     if (!supabase) {
@@ -116,12 +135,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: "Supabase no está configurado." }
     }
 
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      return { error: error.message }
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (!error) return {}
+      console.error("Error signing out globally:", error)
+    } catch (error) {
+      console.error("Error signing out globally:", error)
     }
 
-    return {}
+    // Without a connection the server session cannot be revoked; still end it on this device.
+    const { error } = await supabase.auth.signOut({ scope: "local" })
+    return error ? { error: error.message } : {}
   }, [supabase])
 
   const verifyEmailOtp = useCallback(

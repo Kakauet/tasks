@@ -115,7 +115,7 @@ function DashboardContent({
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [authBusy, setAuthBusy] = useState(false)
   const isMobile = useIsMobile()
-  const { canUndo, canRedo, undo, redo, tasks, events, isLoading } = useTaskContext()
+  const { canUndo, canRedo, undo, redo, tasks, events, isLoading, syncState, syncNow } = useTaskContext()
   const {
     user,
     signInWithMagicLink,
@@ -132,6 +132,11 @@ function DashboardContent({
   const eventCount = events.length
   const selectedAccentPreset = ACCENT_PRESETS.find((preset) => preset.id === selectedAccentId) ?? DEFAULT_ACCENT_PRESET
   const cloudConnected = cloudStatus === "available" && !!user
+  const syncProblem = cloudConnected && (syncState.status === "error" || syncState.status === "offline")
+  const syncHealthy = cloudConnected && !syncProblem
+  const cloudLabel = cloudConnected
+    ? { synced: "Sincronizado", pending: "Sincronizando", offline: "Sin conexión", error: "Error", disabled: "Sincronizando" }[syncState.status]
+    : cloudStatus === "checking" ? "Comprobando" : cloudStatus === "available" ? "Sin sesión" : cloudStatus === "unavailable" ? "No disponible" : "Sin configurar"
 
   useEffect(() => {
     const preloadSecondaryViews = () => {
@@ -283,7 +288,7 @@ function DashboardContent({
               aria-hidden="true"
               className={cn(
                 "absolute right-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-background",
-                cloudConnected ? "bg-emerald-500" : cloudStatus === "available" ? "bg-primary" : "bg-amber-500",
+                syncHealthy ? "bg-emerald-500" : cloudStatus === "available" && !syncProblem ? "bg-primary" : "bg-amber-500",
               )}
             />
           </Button>
@@ -306,11 +311,11 @@ function DashboardContent({
             <div className="px-4 py-3 border-b border-border/50">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  {cloudConnected ? <Cloud className="h-4 w-4 text-emerald-500" /> : cloudStatus === "available" ? <Cloud className="h-4 w-4 text-primary" /> : <CloudOff className="h-4 w-4 text-amber-500" />}
+                  {syncHealthy ? <Cloud className="h-4 w-4 text-emerald-500" /> : cloudStatus === "available" && !syncProblem ? <Cloud className="h-4 w-4 text-primary" /> : <CloudOff className="h-4 w-4 text-amber-500" />}
                   <h3 className="text-sm font-medium text-foreground">Sincronización</h3>
                 </div>
-                <Badge variant={cloudConnected ? "default" : "outline"} className="text-[10px]">
-                  {cloudConnected ? "Sincronizado" : cloudStatus === "checking" ? "Comprobando" : cloudStatus === "available" ? "Sin sesión" : cloudStatus === "unavailable" ? "No disponible" : "Sin configurar"}
+                <Badge variant={syncHealthy ? "default" : "outline"} className="text-[10px]">
+                  {cloudLabel}
                 </Badge>
               </div>
 
@@ -414,6 +419,27 @@ function DashboardContent({
                       </Button>
                     </>
                   )}
+                </div>
+              )}
+
+              {syncProblem && (
+                <div className="mb-2 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {syncState.status === "offline"
+                      ? "Sin conexión. Los cambios se guardan en este dispositivo y se subirán al volver la conexión."
+                      : syncState.error}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-full bg-transparent text-xs"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      syncNow()
+                    }}
+                  >
+                    Sincronizar ahora
+                  </Button>
                 </div>
               )}
 

@@ -2,6 +2,9 @@
 
 import { track, trackStateChange } from "@/lib/activity"
 import { useAuth } from "@/context/auth-context"
+import { createBackup, saveRecovery } from "@/lib/data/backup"
+import { isBlankState, mergeStates, sameState } from "@/lib/sync/merge"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { addDays, differenceInCalendarDays, format, isAfter, isBefore, isSameDay, parseISO } from "date-fns"
 import {
   createContext,
@@ -33,7 +36,7 @@ import {
 } from "@/lib/tasks/model"
 import { insertTask } from "@/lib/tasks/order"
 import { generateRecurringEvents } from "@/lib/tasks/recurrence"
-import { loadLocalState, saveLocalState } from "@/lib/tasks/storage"
+import { loadLocalState, saveLocalState, type SyncBase } from "@/lib/tasks/storage"
 import type { AppState, Event, Task, TaskStatus, TaskStep, TaskTag } from "@/lib/tasks/types"
 export type {
   AppState,
@@ -49,7 +52,34 @@ export type {
 
 const REMOTE_STATE_TABLE = "user_state"
 const HISTORY_LIMIT = 50
+const SYNC_DEBOUNCE_MS = 800
+const POLL_INTERVAL = 30_000
+const MIN_RETRY_DELAY = 2_000
+const MAX_RETRY_DELAY = 60_000
+const MAX_SYNC_ATTEMPTS = 5
 let lastStorageWarning = 0
+
+export type SyncStatus = "disabled" | "pending" | "synced" | "offline" | "error"
+export interface SyncState {
+  status: SyncStatus
+  error: string | null
+}
+
+/** Each upload gets a later version than the copy it replaces, even if this device's clock is behind. */
+const nextVersion = (previous: string | null) => {
+  const previousTime = previous ? Date.parse(previous) : Number.NaN
+  return new Date(Number.isFinite(previousTime) ? Math.max(Date.now(), previousTime + 1) : Date.now()).toISOString()
+}
+
+const syncErrorMessage = (error: unknown) => {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown }
+  if (code === "42P01" || code === "PGRST205") return "Falta la tabla user_state en Supabase. Sigue docs/SUPABASE_SETUP.md."
+  if (code === "42501") return "Supabase ha denegado el acceso a tus datos. Revisa las políticas de la tabla user_state."
+  if (typeof message !== "string" || /fetch|network|load failed/i.test(message)) {
+    return "No se puede conectar con la nube. Se reintentará automáticamente."
+  }
+  return message
+}
 
 interface History {
   past: AppState[]
@@ -60,6 +90,8 @@ interface History {
 // Interfaz del contexto
 interface TaskContextType {
   isLoading: boolean
+  syncState: SyncState
+  syncNow: () => void
   tasks: Task[]
   events: Event[]
   tags: TaskTag[]
@@ -131,12 +163,30 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // the same event handler build on each other instead of on a stale render.
   const historyRef = useRef(history)
   const [isLoading, setIsLoading] = useState(true)
-  const { user, supabase, isSupabaseConfigured, cloudStatus, isLoading: isAuthLoading } = useAuth()
+  const { user, supabase, cloudStatus } = useAuth()
   // Depend on the account, not on the user object that changes with every token refresh.
   const userId = user?.id ?? null
-  const initialLoadDoneRef = useRef(false)
-  const skipNextRemoteWriteRef = useRef(false)
-  const lastSyncedAtRef = useRef<string | null>(null)
+  // Cloud sync runs only for a signed-in account on a reachable project, once local data is on screen.
+  const cloudUserId = !isLoading && userId && supabase && cloudStatus === "available" ? userId : null
+  const cloudUserRef = useRef<string | null>(null)
+  const syncBaseRef = useRef<SyncBase | null>(null)
+  /** The state a sync last put on screen or uploaded; any other state has changes to upload. */
+  const appliedStateRef = useRef<AppState | null>(null)
+  const syncRunningRef = useRef(false)
+  const syncAgainRef = useRef(false)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const retryDelayRef = useRef(0)
+  const runSyncRef = useRef<() => Promise<void>>(async () => {})
+  const [syncState, setSyncStateValue] = useState<SyncState>({ status: "disabled", error: null })
+
+  const setSyncState = useCallback((status: SyncStatus, error: string | null = null) => {
+    setSyncStateValue((current) => (current.status === status && current.error === error ? current : { status, error }))
+  }, [])
+
+  const scheduleSync = useCallback((delay: number) => {
+    clearTimeout(syncTimerRef.current)
+    syncTimerRef.current = setTimeout(() => void runSyncRef.current(), delay)
+  }, [])
 
   const commitHistory = useCallback((next: History) => {
     historyRef.current = next
@@ -145,7 +195,6 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   /** Replace the state without an undo entry (loading, remote updates). */
   const resetState = useCallback((state: AppState) => {
-    skipNextRemoteWriteRef.current = true
     commitHistory({ past: [], present: state, future: [] })
   }, [commitHistory])
 
@@ -165,91 +214,29 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    if (isAuthLoading) return
     let cancelled = false
-    initialLoadDoneRef.current = false
-
-    const loadInitialState = async () => {
-      try {
-        setIsLoading(true)
-        const local = await loadLocalState()
-
-        if (!userId || !supabase || !isSupabaseConfigured || cloudStatus !== "available") {
-          if (!cancelled) {
-            lastSyncedAtRef.current = null
-            resetState(local.state)
-          }
-          return
-        }
-
-        const { data, error } = await supabase
-          .from(REMOTE_STATE_TABLE)
-          .select("data, updated_at")
-          .eq("user_id", userId)
-          .maybeSingle()
-
-        if (error) {
-          throw error
-        }
-
+    // Local data renders immediately; the cloud copy is merged in afterwards.
+    void loadLocalState()
+      .then(({ state, syncBase }) => {
         if (cancelled) return
-        const remoteState = repairPersistedState(data?.data)
-        const remoteUpdatedAt = data?.updated_at ? Date.parse(data.updated_at) : Number.NaN
-        const localSavedAt = local.savedAt ? Date.parse(local.savedAt) : Number.NaN
-        // Changes made offline on this device are newer than the cloud copy: keep them and upload them.
-        const localIsNewer = local.hasLocalData && Number.isFinite(localSavedAt) && Number.isFinite(remoteUpdatedAt) && localSavedAt > remoteUpdatedAt
-
-        if (remoteState && !localIsNewer) {
-          lastSyncedAtRef.current = data?.updated_at ?? null
-          resetState(remoteState)
-          return
-        }
-
-        resetState(local.state)
-
-        if (local.hasLocalData) {
-          const syncedAt = new Date().toISOString()
-          const { error: upsertError } = await supabase.from(REMOTE_STATE_TABLE).upsert(
-            {
-              user_id: userId,
-              data: local.state,
-              updated_at: syncedAt,
-            },
-            { onConflict: "user_id" },
-          )
-
-          if (upsertError) {
-            console.error("Error syncing initial local state to Supabase:", upsertError)
-          } else {
-            lastSyncedAtRef.current = syncedAt
-          }
-        }
-      } catch (error) {
-        console.error("Error loading initial state:", error)
-        if (!cancelled) {
-          const { state: localState } = await loadLocalState()
-          resetState(localState)
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-          initialLoadDoneRef.current = true
-        }
-      }
-    }
-
-    void loadInitialState()
+        syncBaseRef.current = syncBase ?? null
+        appliedStateRef.current = state
+        resetState(state)
+      })
+      .catch((error) => console.error("Error loading initial state:", error))
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [userId, supabase, isSupabaseConfigured, cloudStatus, isAuthLoading, resetState])
+  }, [resetState])
 
   useEffect(() => {
-    if (isLoading || !initialLoadDoneRef.current) return
+    if (isLoading) return
 
-    const stateToPersist: AppState = { tasks, events, tags }
-    void saveLocalState(stateToPersist).catch(error => {
+    void saveLocalState(present, syncBaseRef.current).catch(error => {
       console.error("Error saving local state:", error)
       if (Date.now() - lastStorageWarning > 30000) {
         lastStorageWarning = Date.now()
@@ -258,77 +245,209 @@ export function TaskProvider({ children }: { children: ReactNode }) {
           : "No se pudo usar el almacenamiento comprimido. Exporta una copia de seguridad.")
       }
     })
-    const timeoutId = setTimeout(() => {
+  }, [present, isLoading])
 
-      if (!userId || !supabase || !isSupabaseConfigured || cloudStatus !== "available") {
-        return
+  /**
+   * One pull-merge-push round. The write only succeeds if the cloud copy is
+   * still the one that was merged, so two devices saving at once never
+   * overwrite each other: the loser gets "conflict" and merges again.
+   */
+  const syncOnce = useCallback(
+    async (client: SupabaseClient, uid: string): Promise<"done" | "conflict" | "aborted"> => {
+      const active = () => cloudUserRef.current === uid
+      const known = syncBaseRef.current?.userId === uid ? syncBaseRef.current : null
+
+      // Cheap check first: nothing changed on this device and the cloud copy is the one last merged.
+      if (known?.version && sameState(historyRef.current.present, known.state)) {
+        const { data, error } = await client.from(REMOTE_STATE_TABLE).select("updated_at").eq("user_id", uid).maybeSingle()
+        if (error) throw error
+        if (!active()) return "aborted"
+        if (data?.updated_at === known.version) {
+          appliedStateRef.current = historyRef.current.present
+          return "done"
+        }
       }
 
-      if (skipNextRemoteWriteRef.current) {
-        skipNextRemoteWriteRef.current = false
-        return
-      }
-
-      const syncedAt = new Date().toISOString()
-      lastSyncedAtRef.current = syncedAt
-      void supabase
+      const { data: row, error } = await client
         .from(REMOTE_STATE_TABLE)
-        .upsert(
-          {
-            user_id: userId,
-            data: stateToPersist,
-            updated_at: syncedAt,
-          },
-          { onConflict: "user_id" },
-        )
-        .then(({ error }) => {
-          if (error) {
-            console.error("Error syncing state to Supabase:", error)
-          }
+        .select("data, updated_at")
+        .eq("user_id", uid)
+        .maybeSingle()
+      if (error) throw error
+      if (!active()) return "aborted"
+      const remote = row ? repairPersistedState(row.data) : null
+      if (row && !remote) throw new Error("La copia de la nube no tiene un formato válido y no se ha modificado.")
+
+      const base = syncBaseRef.current
+      if (base && base.userId !== uid && !isBlankState(historyRef.current.present)) {
+        // This device holds the data of another account: keep it aside before switching to this account's data.
+        await saveRecovery(await createBackup(historyRef.current.present)).catch((recoveryError) => {
+          console.error("Error saving recovery before switching account:", recoveryError)
+          throw new Error("No se pudo guardar una copia de los datos de la cuenta anterior. Exporta una copia de seguridad y vuelve a intentarlo.")
         })
-    }, 300) // Debounce by 300ms
+        if (!active()) return "aborted"
+        toast.info("Los datos que había en este dispositivo se han guardado como copia de recuperación.")
+      }
 
-    return () => clearTimeout(timeoutId)
-  }, [tasks, events, tags, isLoading, userId, supabase, isSupabaseConfigured, cloudStatus])
+      // Merge synchronously against the latest local state, so edits made while waiting are included.
+      const local = historyRef.current.present
+      const merged =
+        base?.userId === uid
+          ? remote ? mergeStates(base.state, local, remote) : local
+          : base
+            ? remote ?? createDefaultState()
+            : remote ? mergeStates(null, local, remote) : local
+      let onScreen = local
+      if (!sameState(merged, local)) {
+        appliedStateRef.current = merged
+        onScreen = merged
+        resetState(merged)
+      }
 
-  useEffect(() => {
-    if (!userId || !supabase || !isSupabaseConfigured || cloudStatus !== "available") {
+      let version: string | null = row?.updated_at ?? null
+      if (!remote || !sameState(merged, remote)) {
+        const updatedAt = nextVersion(version)
+        const request = row
+          ? client
+              .from(REMOTE_STATE_TABLE)
+              .update({ data: merged, updated_at: updatedAt })
+              .eq("user_id", uid)
+              .eq("updated_at", row.updated_at)
+          : client.from(REMOTE_STATE_TABLE).insert({ user_id: uid, data: merged, updated_at: updatedAt })
+        const { data: written, error: writeError } = await request.select("updated_at")
+        // Another device wrote (or created the row) since it was read.
+        if (writeError?.code === "23505") return "conflict"
+        if (writeError) throw writeError
+        if (!written?.length) return "conflict"
+        version = written[0].updated_at
+      }
+      if (!active()) return "aborted"
+
+      const nextBase: SyncBase = { userId: uid, version, state: merged }
+      syncBaseRef.current = nextBase
+      const current = historyRef.current.present
+      if (current === onScreen) appliedStateRef.current = current
+      // Store the new base together with the state it belongs to.
+      void saveLocalState(current, nextBase).catch((saveError) => console.error("Error saving local state:", saveError))
+      return "done"
+    },
+    [resetState],
+  )
+
+  const runSync = useCallback(async () => {
+    const uid = cloudUserRef.current
+    if (!uid || !supabase) return
+    if (syncRunningRef.current) {
+      syncAgainRef.current = true
       return
     }
 
+    syncRunningRef.current = true
+    clearTimeout(syncTimerRef.current)
+    try {
+      for (let attempt = 1; ; attempt++) {
+        syncAgainRef.current = false
+        const result = await syncOnce(supabase, uid)
+        if (result === "aborted") return
+        if (result === "conflict") {
+          if (attempt >= MAX_SYNC_ATTEMPTS) throw new Error("La nube no ha aceptado los cambios tras varios intentos.")
+          continue
+        }
+        if (!syncAgainRef.current) break
+      }
+      retryDelayRef.current = 0
+      const base = syncBaseRef.current
+      setSyncState(base && sameState(historyRef.current.present, base.state) ? "synced" : "pending")
+    } catch (error) {
+      if (cloudUserRef.current !== uid) return
+      console.error("Error syncing with the cloud:", error)
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false
+      setSyncState(offline ? "offline" : "error", offline ? null : syncErrorMessage(error))
+      retryDelayRef.current = Math.min(MAX_RETRY_DELAY, Math.max(MIN_RETRY_DELAY, retryDelayRef.current * 2))
+      scheduleSync(retryDelayRef.current)
+    } finally {
+      syncRunningRef.current = false
+    }
+  }, [supabase, syncOnce, setSyncState, scheduleSync])
+  runSyncRef.current = runSync
+
+  const syncNow = useCallback(() => {
+    retryDelayRef.current = 0
+    void runSyncRef.current()
+  }, [])
+
+  // Start syncing when an account is signed in; stop (keeping local data) when it signs out.
+  useEffect(() => {
+    cloudUserRef.current = cloudUserId
+    retryDelayRef.current = 0
+    clearTimeout(syncTimerRef.current)
+    if (!cloudUserId) {
+      setSyncState("disabled")
+      return
+    }
+    setSyncState("pending")
+    void runSyncRef.current()
+    return () => clearTimeout(syncTimerRef.current)
+  }, [cloudUserId, setSyncState])
+
+  // Upload local changes shortly after they happen.
+  useEffect(() => {
+    if (!cloudUserId || present === appliedStateRef.current) return
+    setSyncStateValue((current) => (current.status === "synced" ? { status: "pending", error: null } : current))
+    scheduleSync(SYNC_DEBOUNCE_MS)
+  }, [present, cloudUserId, scheduleSync])
+
+  // Catch up after being offline or in the background, and upload pending changes before the page is hidden.
+  useEffect(() => {
+    if (!cloudUserId) return
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" || historyRef.current.present !== appliedStateRef.current) void runSyncRef.current()
+    }
+    const poll = () => {
+      if (document.visibilityState === "visible") void runSyncRef.current()
+    }
+    window.addEventListener("online", syncNow)
+    document.addEventListener("visibilitychange", handleVisibility)
+    // Polling only asks for the version, and covers projects without Realtime enabled.
+    const intervalId = setInterval(poll, POLL_INTERVAL)
+    return () => {
+      window.removeEventListener("online", syncNow)
+      document.removeEventListener("visibilitychange", handleVisibility)
+      clearInterval(intervalId)
+    }
+  }, [cloudUserId, syncNow])
+
+  useEffect(() => {
+    if (!cloudUserId || !supabase) return
+
+    // A unique topic: a channel with the same name may still be closing, and
+    // Supabase would hand back that channel instead of a new one.
     const channel = supabase
-      .channel(`taskmaster-user-state-${userId}`)
+      .channel(`taskmaster-user-state-${cloudUserId}-${uuidv4()}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: REMOTE_STATE_TABLE,
-          filter: `user_id=eq.${userId}`,
+          filter: `user_id=eq.${cloudUserId}`,
         },
         (payload) => {
-          const payloadData = payload.new as { data?: unknown; updated_at?: string } | null
-          const incomingUpdatedAt = payloadData?.updated_at ?? null
-          if (incomingUpdatedAt && incomingUpdatedAt === lastSyncedAtRef.current) {
-            return
-          }
-
-          const nextState = repairPersistedState(payloadData?.data)
-          if (!nextState) return
-
-          if (incomingUpdatedAt) {
-            lastSyncedAtRef.current = incomingUpdatedAt
-          }
-
-          resetState(nextState)
+          // The payload may be truncated for large states, so it only signals that there is something to fetch.
+          const incomingUpdatedAt = (payload.new as { updated_at?: string } | null)?.updated_at
+          if (incomingUpdatedAt && incomingUpdatedAt === syncBaseRef.current?.version) return
+          void runSyncRef.current()
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        // Also fires after reconnecting: fetch whatever changed while disconnected.
+        if (status === "SUBSCRIBED") void runSyncRef.current()
+      })
 
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [userId, supabase, isSupabaseConfigured, cloudStatus, resetState])
+  }, [cloudUserId, supabase])
 
   // Registrar un cambio de estado con historial de deshacer
   const recordChange = useCallback(
@@ -338,7 +457,6 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      skipNextRemoteWriteRef.current = false
       trackStateChange(current, newState)
       commitHistory({ past: [...previousPast, current].slice(-HISTORY_LIMIT), present: newState, future: [] })
     },
@@ -378,7 +496,6 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const { past: previousPast, present: current, future: previousFuture } = historyRef.current
     if (previousPast.length === 0) return
 
-    skipNextRemoteWriteRef.current = false
     const previous = previousPast[previousPast.length - 1]
     track("history.undo")
     trackStateChange(current, previous)
@@ -389,7 +506,6 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const { past: previousPast, present: current, future: previousFuture } = historyRef.current
     if (previousFuture.length === 0) return
 
-    skipNextRemoteWriteRef.current = false
     const next = previousFuture[0]
     track("history.redo")
     trackStateChange(current, next)
@@ -894,6 +1010,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const contextValue = useMemo<TaskContextType>(
     () => ({
       isLoading,
+      syncState,
+      syncNow,
       tasks,
       events,
       tags,
@@ -932,6 +1050,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     }),
     [
       isLoading,
+      syncState,
+      syncNow,
       tasks,
       events,
       tags,

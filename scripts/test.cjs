@@ -15,3 +15,4 @@ for (const extension of ['.ts', '.tsx']) require.extensions[extension] = (module
 };
 require('../tests/regressions.cjs');
 require('../tests/data-and-activity.cjs');
+require('../tests/sync.cjs');
