@@ -81,4 +81,3 @@ node scripts/browser-check.cjs
 | `design-qa.cjs`, `ux-smoke.cjs` | `QA_URL` (puerto 3000); resuelven Playwright por Node/`NODE_PATH` y requieren su Chromium disponible |
 
 `ux-smoke.cjs` no bloquea las peticiones a Supabase; ejecútalo contra una instancia local sin configuración de nube. `NEXT_BUILD_DIR` permite aislar una compilación de pruebas del directorio `.next` habitual. No es necesario instalar navegadores adicionales para ejecutar las pruebas de regresión de Node.
-
