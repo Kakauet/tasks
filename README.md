@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/Kakauet/tasks/actions/workflows/ci.yml/badge.svg)](https://github.com/Kakauet/tasks/actions/workflows/ci.yml) [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
 
-Aplicación web para gestionar tareas y eventos: tablero Kanban, calendario, etiquetas y sincronización opcional entre dispositivos. Funciona sin cuenta y guarda los datos en el propio navegador.
+TaskMaster es la app que me he hecho para organizarme. La uso sobre todo para los estudios: tener a mano las tareas pendientes, las entregas y los exámenes, y ver cómo se reparte todo en el calendario.
+
+Está hecha a mi medida, con una forma de organizar las cosas que me resulta cómoda: mover tareas por el tablero, cambiar fechas arrastrando eventos y ver de un vistazo lo que tengo por delante. La comparto aquí por si a alguien más le sirve o quiere ver cómo está montada.
 
 <table>
   <tr>
@@ -15,83 +17,41 @@ Aplicación web para gestionar tareas y eventos: tablero Kanban, calendario, eti
   </tr>
 </table>
 
-## Características
+## Cómo la uso
 
-- **Tablero Kanban** con columnas *Por hacer*, *En progreso* y *Completadas*, arrastrar y soltar (también en móvil), orden por columna y operaciones en bloque.
-- **Pasos** dentro de cada tarea para dividir el trabajo y seguir el progreso.
-- **Calendario** con vistas de mes y semana, eventos de día completo, de varios días y recurrentes.
-- **Eventos calificables**: marca exámenes o entregas y anota la nota.
-- **Etiquetas, prioridades y fechas de vencimiento.**
-- **Temporizador de foco** asociado a tareas.
-- **Apariencia personalizable**: tema claro/oscuro/sistema, acentos y colores de columna.
-- **Copias de seguridad**: exportación/importación JSON o gzip con vista previa, combinación y copias de recuperación.
-- **Atajos de teclado** y deshacer/rehacer.
-- **Sincronización opcional** con Supabase (login por email, Google o GitHub).
+- En el **tablero** separo lo que tengo por hacer, lo que está en marcha y lo que ya he terminado. Puedo arrastrar las tareas, ordenarlas y dividirlas en pasos.
+- En el **calendario** coloco exámenes, entregas y otros eventos. Hay vistas de mes y semana, eventos de varios días y repeticiones.
+- Con **etiquetas, prioridades y fechas** organizo las tareas y encuentro lo que me interesa. Los eventos evaluables permiten guardar también la nota.
+- El **temporizador de foco** me sirve para dedicar un rato a una tarea y llevar la cuenta del tiempo.
 
-## Tecnologías
+También tiene deshacer/rehacer, acciones en bloque y opciones de apariencia. El tablero se puede usar tanto con ratón como desde el móvil.
 
-Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · shadcn/ui (Radix) · react-dnd · date-fns · Supabase · IndexedDB
+## Tus datos
 
-## Puesta en marcha
+Se puede usar sin cuenta. Las tareas y los eventos se guardan en el navegador con IndexedDB; para conservar una copia fuera de ese navegador puedes exportarlos en JSON o gzip e importarlos después.
 
-Requisitos: Node.js 18.17 o superior.
+La sincronización entre dispositivos es opcional y usa Supabase. Si no la configuras, la aplicación sigue funcionando en modo local. Los detalles sobre copias de seguridad, recuperación y registro local de actividad están en [Datos y actividad](docs/DATA_AND_ACTIVITY.md).
+
+## Probarla en local
+
+Usa **Node.js 22** y npm. La versión está indicada en `.nvmrc` y es la que usa CI.
 
 ```bash
 git clone https://github.com/Kakauet/tasks.git
 cd tasks
-npm install
+npm ci
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000).
+Abre [localhost:3000](http://localhost:3000). No hace falta configurar nada más para usarla en modo local.
 
-### Sincronización entre dispositivos (opcional)
+Para sincronizar, copia `.env.example` a `.env.local`, rellena las variables de Supabase y sigue la [guía de configuración](docs/SUPABASE_SETUP.md). Después reinicia el servidor.
 
-Sin configuración, la app funciona en modo local. Para activar login y sincronización:
+## Código y pruebas
 
-1. Copia `.env.example` a `.env.local`.
-2. Sigue [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md) y rellena `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-3. Reinicia el servidor de desarrollo.
+Está hecha con Next.js 14, React 18 y TypeScript. La interfaz usa Tailwind CSS, componentes de shadcn/ui y react-dnd; los datos locales se guardan en IndexedDB y la nube va por Supabase.
 
-## Scripts
-
-| Comando | Descripción |
-| --- | --- |
-| `npm run dev` | Servidor de desarrollo |
-| `npm run build` | Compilación de producción |
-| `npm start` | Sirve la compilación de producción |
-| `npm run build:dist` | Exportación estática en `dist/` para cualquier hosting estático |
-| `npm run typecheck` | Comprobación de tipos con TypeScript |
-| `npm run lint` | ESLint |
-| `npm test` | Pruebas de regresión, datos y actividad |
-
-## Estructura del proyecto
-
-```
-app/          Rutas, layout, estilos globales y manifest
-components/   Vistas y componentes (ui/ contiene los primitivos de shadcn)
-context/      Estado de tareas y autenticación
-hooks/        Hooks reutilizables
-lib/          Lógica de dominio, datos, apariencia y utilidades
-tests/        Pruebas automatizadas (ejecutadas por npm test)
-scripts/      Utilidades de compilación y comprobaciones de navegador
-docs/         Documentación adicional
-```
-
-Puntos de entrada útiles:
-
-- `components/dashboard.tsx`: navegación, cuenta y composición de las vistas.
-- `components/task-board.tsx` y `components/calendar-view.tsx`: vistas de tareas y eventos.
-- `context/task-context.tsx`: operaciones, historial y sincronización con Supabase.
-- `lib/tasks/`: tipos, normalización, almacenamiento, recurrencias y orden de tareas, independientes de React.
-- `lib/data/`: IndexedDB, copias de seguridad y registro de actividad.
-- `lib/appearance.ts`: catálogo de colores y contraste; lo comparten el script previo a React y los ajustes.
-
-### Datos
-
-Los datos se guardan en IndexedDB y conservan las claves y el formato de exportación existentes; las instalaciones anteriores migran automáticamente desde `localStorage`. Las importaciones inválidas se rechazan completas antes de cambiar el estado, y si el almacenamiento contiene datos ilegibles se conservan en `taskmaster-state-recovery` antes de usar el estado de respaldo. Detalles en [docs/DATA_AND_ACTIVITY.md](docs/DATA_AND_ACTIVITY.md).
-
-## Verificación
+Antes de subir cambios:
 
 ```bash
 npm run typecheck
@@ -100,17 +60,19 @@ npm test
 npm run build
 ```
 
-`npm test` usa Node y el compilador TypeScript del proyecto, sin framework adicional. Estas mismas comprobaciones se ejecutan en GitHub Actions en cada push y pull request.
+GitHub Actions ejecuta estas mismas comprobaciones. Las pruebas locales no necesitan cuentas, credenciales ni un navegador instalado.
 
-Los scripts `scripts/*-check.cjs`, `design-qa.cjs` y `ux-smoke.cjs` son comprobaciones de navegador con Playwright (no incluido como dependencia) que guardan capturas en `artifacts/`. Variables: `TEST_URL` (servidor a probar), `PLAYWRIGHT_MODULE` (si Playwright está instalado fuera del proyecto) y `BROWSER_CHANNEL` (por defecto `msedge`). Las llamadas a Supabase se bloquean para mantener las pruebas locales. `NEXT_BUILD_DIR` permite aislar una compilación de pruebas del directorio `.next` habitual.
+Si quieres explorar el código o hacer cambios:
 
-## Documentación
+- [Desarrollo](docs/DEVELOPMENT.md): estructura, comandos y comprobaciones de navegador.
+- [Arquitectura](docs/ARCHITECTURE.md): estado, historial, persistencia y sincronización.
+- [Diseño](docs/DESIGN.md): colores y componentes de la interfaz.
+- [Despliegue](docs/DEPLOY.md): Vercel o exportación estática.
 
-- [docs/DESIGN.md](docs/DESIGN.md): sistema de diseño (tokens, superficies, componentes).
-- [docs/DATA_AND_ACTIVITY.md](docs/DATA_AND_ACTIVITY.md): copias de seguridad, almacenamiento y registro de actividad.
-- [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md): autenticación y sincronización.
-- [docs/DEPLOY.md](docs/DEPLOY.md): despliegue en Vercel o hosting estático.
+## Sobre el proyecto
+
+Lo voy adaptando a lo que necesito para estudiar y organizarme. Si encuentras un fallo o tienes una idea, puedes abrir una issue; ayuda mucho incluir los pasos para reproducirlo y el navegador que usas. Para proponer un cambio grande, mejor comentarlo primero.
 
 ## Licencia
 
-[MIT](LICENSE)
+[MIT](LICENSE).
