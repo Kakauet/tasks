@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Netlify añade en el plan gratuito una insignia flotante que tapa la app y no deja ocultarla. */
+#nl-badge-frame {
+  display: none !important;
+}
+
 @layer base {
   :root {
     color-scheme: light;

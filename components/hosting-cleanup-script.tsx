@@ -3,8 +3,9 @@
  * (and the whitespace around it) inside <head>, so React's hydration no longer
  * matches the server HTML: in a background tab the board then stays on its
  * skeleton until the first click. This runs while <head> is parsed, before
- * React hydrates, and removes those foreign nodes. It also uses the badge's
- * own "Hide this badge" preference so Netlify does not overlay the app.
+ * React hydrates, and removes those foreign nodes. Netlify's floating badge
+ * is hidden from globals.css instead: on the free tier it ignores its own
+ * "Hide this badge" preference.
  */
 const script = `(() => {
   try {
@@ -12,7 +13,6 @@ const script = `(() => {
       if (node.nodeType === 8 || (node.nodeType === 3 && !node.textContent.trim())) node.remove();
     });
   } catch {}
-  try { localStorage.setItem("nl-hud:public:v1", "hidden"); } catch {}
 })();`
 
 export function HostingCleanupScript() {
