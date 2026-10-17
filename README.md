@@ -29,16 +29,6 @@ Cada tarea puede llevar fecha límite, etiquetas y descripción. Hay búsqueda, 
 
 Vista de mes y de semana. Los eventos pueden durar varios días o repetirse, y se cambian de fecha arrastrándolos. Los exámenes y demás eventos evaluables guardan también la nota.
 
-### Asignaturas
-
-Son opcionales: se activan en Configuración y, si no las usas, no aparecen por ningún lado.
-
-Cada tarea o evento puede ir a una asignatura, y desde la barra lateral (o el selector de arriba en el móvil) se filtra todo para ver solo lo de una. Al lado de cada asignatura se ve si vas al día. Por defecto lo estás cuando no te quedan tareas de prioridad media o alta; el criterio se puede cambiar, o puedes marcarlo tú tocando el estado.
-
-Casi nunca hace falta asignarlas a mano. Si el título lleva el nombre de la asignatura o uno de sus apodos («Filo» para Filosofía, por ejemplo), la tarea o el evento va a esa asignatura. Si lleva «examen», cuenta como examen. Al crear una asignatura también recoge lo que ya tenías apuntado con ese nombre.
-
-En Notas están todas las calificaciones juntas, con la media de cada asignatura y la general.
-
 ### Y además
 
 - Temporizador de foco para dedicarle un rato a una tarea y llevar la cuenta del tiempo.
@@ -46,6 +36,27 @@ En Notas están todas las calificaciones juntas, con la media de cada asignatura
 - Atajos de teclado: `N` nueva tarea, `E` nuevo evento, `/` buscar y `?` para ver el resto.
 - Modo claro y oscuro, con el color de acento a tu gusto.
 - Se puede añadir a la pantalla de inicio del móvil y usarla como una app más.
+
+## Asignaturas
+
+Novedad de la 3.3. Son opcionales: se activan en Configuración y, si no las usas, no aparecen por ningún lado.
+
+Cada tarea o evento puede ir a una asignatura, y desde la barra lateral (o el selector de arriba en el móvil) se filtra todo para ver solo lo de una. Arriba aparece un resumen: si vas al día, cuántas tareas te quedan, lo próximo que tienes y tu media.
+
+Casi nunca hace falta asignarlas a mano. Si el título lleva el nombre de la asignatura o uno de sus apodos («Filo» para Filosofía), va a esa asignatura, y si lleva «examen», cuenta como examen. Al crear una asignatura también recoge lo que ya tenías apuntado con ese nombre.
+
+Por defecto vas al día cuando no te quedan tareas de prioridad media o alta. Puedes cambiar el criterio o marcarlo tú con un toque en el estado.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/subjects.jpg" alt="Tablero filtrado por la asignatura Cálculo, con la barra lateral de asignaturas y el resumen arriba"></td>
+    <td width="50%"><img src="docs/screenshots/grades.jpg" alt="Diálogo de notas con la media general y la media de cada asignatura"></td>
+  </tr>
+  <tr>
+    <td align="center">Tablero filtrado por asignatura</td>
+    <td align="center">Notas y medias</td>
+  </tr>
+</table>
 
 ## Tus datos
 
