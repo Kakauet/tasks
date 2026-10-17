@@ -1,5 +1,5 @@
 import { DEFAULT_TAG_TEMPLATES, repairPersistedState } from "@/lib/tasks/model"
-import type { AppState, Event, Task, TaskTag } from "@/lib/tasks/types"
+import type { AppState, Event, Subject, Task, TaskTag } from "@/lib/tasks/types"
 
 type Item = { id: string }
 type Side = "local" | "remote"
@@ -134,29 +134,49 @@ const eventOptions = (hasBase: boolean): MergeOptions<Event> => ({
 
 const tagOptions = (hasBase: boolean): MergeOptions<TaskTag> => ({ winner: hasBase ? preferLocal : preferRemote })
 
+const subjectOptions = (hasBase: boolean): MergeOptions<Subject> => ({ winner: hasBase ? preferLocal : preferRemote })
+
 const normalizedName = (name: string) => name.trim().toLocaleLowerCase("es")
 
 /** True when a device holds nothing but the starter tags. */
 export const isBlankState = (state: AppState) => {
   const defaults = new Set(DEFAULT_TAG_TEMPLATES.map((tag) => normalizedName(tag.name)))
-  return state.tasks.length === 0 && state.events.length === 0 && state.tags.every((tag) => defaults.has(normalizedName(tag.name)))
+  return state.tasks.length === 0 && state.events.length === 0 && state.subjects.length === 0 && state.tags.every((tag) => defaults.has(normalizedName(tag.name)))
 }
 
-/** Without a common ancestor, a local tag with the same name as a cloud tag is the same tag. */
-function adoptRemoteTags(local: AppState, remote: AppState): AppState {
-  const remoteIds = new Set(remote.tags.map((tag) => tag.id))
-  const remoteByName = new Map(remote.tags.map((tag) => [normalizedName(tag.name), tag.id]))
+/** Names that match in both copies identify the same record when there is no common ancestor. */
+function matchByName<T extends { id: string; name: string }>(local: T[], remote: T[]): Map<string, string> {
+  const remoteIds = new Set(remote.map((item) => item.id))
+  const remoteByName = new Map(remote.map((item) => [normalizedName(item.name), item.id]))
   const renamed = new Map<string, string>()
-  for (const tag of local.tags) {
-    const match = remoteByName.get(normalizedName(tag.name))
-    if (!remoteIds.has(tag.id) && match) renamed.set(tag.id, match)
+  for (const item of local) {
+    const match = remoteByName.get(normalizedName(item.name))
+    if (!remoteIds.has(item.id) && match) renamed.set(item.id, match)
   }
-  if (renamed.size === 0) return local
-  const rename = (ids: string[]) => [...new Set(ids.map((id) => renamed.get(id) ?? id))]
+  return renamed
+}
+
+/** Without a common ancestor, a local tag or subject with the same name as a cloud one is the same record. */
+function adoptRemoteNames(local: AppState, remote: AppState): AppState {
+  const renamedTags = matchByName(local.tags, remote.tags)
+  const renamedSubjects = matchByName(local.subjects, remote.subjects)
+  if (renamedTags.size === 0 && renamedSubjects.size === 0) return local
+  const rename = (ids: string[]) => [...new Set(ids.map((id) => renamedTags.get(id) ?? id))]
+  const retarget = <T extends { tags: string[]; subjectId?: string }>(record: T): T => {
+    const usesTag = record.tags.some((id) => renamedTags.has(id))
+    const usesSubject = record.subjectId !== undefined && renamedSubjects.has(record.subjectId)
+    if (!usesTag && !usesSubject) return record
+    return {
+      ...record,
+      ...(usesTag ? { tags: rename(record.tags) } : {}),
+      ...(usesSubject ? { subjectId: renamedSubjects.get(record.subjectId as string) } : {}),
+    }
+  }
   return {
-    tasks: local.tasks.map((task) => (task.tags.some((id) => renamed.has(id)) ? { ...task, tags: rename(task.tags) } : task)),
-    events: local.events.map((event) => (event.tags.some((id) => renamed.has(id)) ? { ...event, tags: rename(event.tags) } : event)),
-    tags: local.tags.filter((tag) => !renamed.has(tag.id)),
+    tasks: local.tasks.map(retarget),
+    events: local.events.map(retarget),
+    tags: local.tags.filter((tag) => !renamedTags.has(tag.id)),
+    subjects: local.subjects.filter((subject) => !renamedSubjects.has(subject.id)),
   }
 }
 
@@ -199,17 +219,25 @@ function dropDanglingReferences(merged: AppState, inputs: AppState[]): AppState 
   const tagIds = new Set(merged.tags.map((tag) => tag.id))
   const knownTagIds = new Set(inputs.flatMap((state) => state.tags.map((tag) => tag.id)))
   const deletedTag = (id: string) => knownTagIds.has(id) && !tagIds.has(id)
+  const subjectIds = new Set(merged.subjects.map((subject) => subject.id))
+  const knownSubjectIds = new Set(inputs.flatMap((state) => state.subjects.map((subject) => subject.id)))
+  const deletedSubject = (id?: string) => id !== undefined && knownSubjectIds.has(id) && !subjectIds.has(id)
   const eventIds = new Set(merged.events.map((event) => event.id))
   const knownEventIds = new Set(inputs.flatMap((state) => state.events.map((event) => event.id)))
-  const withoutDeletedTags = <T extends { tags: string[] }>(record: T): T =>
-    record.tags.some(deletedTag) ? { ...record, tags: record.tags.filter((id) => !deletedTag(id)) } : record
+  const withoutDeleted = <T extends { tags: string[]; subjectId?: string }>(record: T): T => {
+    const cleaned = record.tags.some(deletedTag) ? { ...record, tags: record.tags.filter((id) => !deletedTag(id)) } : record
+    if (!deletedSubject(cleaned.subjectId)) return cleaned
+    const { subjectId: _removed, ...rest } = cleaned
+    return rest as T
+  }
 
   return {
-    tasks: merged.tasks.map(withoutDeletedTags),
+    tasks: merged.tasks.map(withoutDeleted),
     events: merged.events
       .filter((event) => !event.parentEventId || eventIds.has(event.parentEventId) || !knownEventIds.has(event.parentEventId))
-      .map(withoutDeletedTags),
+      .map(withoutDeleted),
     tags: merged.tags,
+    subjects: merged.subjects,
   }
 }
 
@@ -222,7 +250,7 @@ function dropDanglingReferences(merged: AppState, inputs: AppState[]): AppState 
 export function mergeStates(base: AppState | null, local: AppState, remote: AppState): AppState {
   if (!base && isBlankState(local)) return remote
   const hasBase = !!base
-  const localSide = base ? local : adoptRemoteTags(local, remote)
+  const localSide = base ? local : adoptRemoteNames(local, remote)
 
   const events = mergeList(base?.events ?? null, localSide.events, remote.events, eventOptions(hasBase))
   const merged = dropDanglingReferences(
@@ -230,6 +258,7 @@ export function mergeStates(base: AppState | null, local: AppState, remote: AppS
       tasks: mergeList(base?.tasks ?? null, localSide.tasks, remote.tasks, taskOptions(hasBase)),
       events: resolveSeries(base?.events ?? null, localSide.events, remote.events, events),
       tags: mergeList(base?.tags ?? null, localSide.tags, remote.tags, tagOptions(hasBase)),
+      subjects: mergeList(base?.subjects ?? null, localSide.subjects, remote.subjects, subjectOptions(hasBase)),
     },
     base ? [base, local, remote] : [local, remote],
   )

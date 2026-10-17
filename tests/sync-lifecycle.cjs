@@ -4,7 +4,7 @@ const Module = require('node:module');
 const React = require('react');
 const { create, act } = require('react-test-renderer');
 
-const state = { tasks: [], events: [], tags: [] };
+const state = { tasks: [], events: [], tags: [], subjects: [] };
 const deferred = () => {
   let resolve;
   const promise = new Promise(done => { resolve = done; });

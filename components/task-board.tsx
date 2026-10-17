@@ -21,6 +21,8 @@ import { TagsDialog } from "@/components/tags-dialog"
 import { TaskColumn } from "@/components/task-column"
 import { TaskBoardSort } from "@/components/task-column-sort"
 import { TaskDialog } from "@/components/task-dialog"
+import { SubjectScopeBar } from "@/components/subjects/subject-scope-bar"
+import { useSubjectScope } from "@/context/subject-scope"
 import { TagBadge } from "@/components/ui/tag-badge"
 import type { TaskPriority } from "@/lib/tasks/types"
 import { getSortedTaskGroups, updateColumnSorts, type TaskSort } from "@/lib/tasks/view"
@@ -61,7 +63,9 @@ function MobileColumnTab({ status, label, count, active, onSelect }: {
 }
 
 export const TaskBoard = () => {
-  const { tasks, tags, searchTasks } = useTaskContext()
+  const { tasks: allTasks, tags, searchTasks } = useTaskContext()
+  const { scope, scopeTasks, defaultSubjectId } = useSubjectScope()
+  const tasks = useMemo(() => scopeTasks(allTasks), [scopeTasks, allTasks])
   const taskDialog = useDialogState(false)
   const tagsDialog = useDialogState(false)
   const [mobileStatus, setMobileStatus] = useState<"todo" | "inProgress" | "done">("todo")
@@ -82,7 +86,7 @@ export const TaskBoard = () => {
 
     // Apply search filter
     if (searchTerm.trim()) {
-      result = searchTasks(searchTerm)
+      result = scopeTasks(searchTasks(searchTerm))
     }
 
     // Apply tag filter
@@ -95,7 +99,7 @@ export const TaskBoard = () => {
     }
 
     return result
-  }, [tasks, searchTerm, selectedTags, selectedPriorities, searchTasks])
+  }, [tasks, searchTerm, selectedTags, selectedPriorities, searchTasks, scopeTasks])
 
   useEffect(() => {
     // A bulk operation must never act on tasks hidden by the current filters.
@@ -190,6 +194,7 @@ export const TaskBoard = () => {
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 sm:gap-3">
       <h1 className="sr-only">Tareas</h1>
+      <SubjectScopeBar />
       <div className="flex shrink-0 flex-row items-center gap-1.5 rounded-2xl border border-border/70 bg-card/70 p-2 shadow-sm sm:gap-2">
         <div className="relative min-w-0 flex-1">
           <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -257,7 +262,7 @@ export const TaskBoard = () => {
         {([ ["todo", "Por hacer", "No hay tareas pendientes."], ["inProgress", "En progreso", "No hay tareas en progreso."], ["done", "Completadas", "No hay tareas completadas."] ] as const).map(([status, title, message]) => (
           <div key={status} className={cn("h-full min-h-0 min-w-0", mobileStatus !== status && "hidden md:block")}>
             <TaskColumn title={title} tasks={taskGroups[status]} status={status}
-              sort={columnSorts[status]} onSortChange={handleColumnSort}
+              sort={columnSorts[status]} onSortChange={handleColumnSort} listKey={scope}
               onMoveStatus={setMobileStatus}
               emptyMessage={hasActiveFilters ? "No hay coincidencias en este estado." : message}
               selectedTasks={selectedTasks} onTaskSelect={handleTaskSelect} showBulkSelect={showBulkOps} manualOrdering={columnSorts[status] === "manual"}
@@ -269,7 +274,7 @@ export const TaskBoard = () => {
       {!showBulkOps && <><TaskDragLayer /><MobileTaskDndUi onHoverStatus={setMobileStatus} /></>}
 
       {/* Diálogos */}
-      <TaskDialog open={taskDialog.isOpen} onOpenChange={taskDialog.setIsOpen} initialStatus={mobileStatus} />
+      <TaskDialog open={taskDialog.isOpen} onOpenChange={taskDialog.setIsOpen} initialStatus={mobileStatus} initialSubjectId={defaultSubjectId} />
       <TagsDialog open={tagsDialog.isOpen} onOpenChange={tagsDialog.setIsOpen} />
     </div>
   )

@@ -14,6 +14,15 @@ export interface TaskTag {
   color: string
 }
 
+export interface Subject {
+  id: string
+  name: string
+  color: string
+  archived?: boolean // Oculta la asignatura de la barra lateral sin borrar sus tareas
+  manual?: "upToDate" | "pending" // Estado fijado a mano; sin valor, se calcula
+  aliases?: string[] // Otros nombres con los que aparece en los títulos («Lengua» para Castellano)
+}
+
 export interface Task {
   id: string
   title: string
@@ -25,6 +34,7 @@ export interface Task {
   weeklyPlanOrder?: number
   steps: TaskStep[]
   tags: string[] // IDs de tags
+  subjectId?: string // Asignatura a la que pertenece la tarea
   focusSeconds?: number // Tiempo de estudio acumulado con el Pomodoro
   focusSessions?: number // Pomodoros completados
   createdAt: string
@@ -51,6 +61,7 @@ export interface Event {
   isGraded: boolean
   grade?: string
   tags: string[] // IDs of tags
+  subjectId?: string // Asignatura a la que pertenece el evento
   recurrence?: EventRecurrence
   parentEventId?: string // Para eventos recurrentes generados
   color?: string // Color personalizado para el evento
@@ -61,5 +72,6 @@ export interface AppState {
   tasks: Task[]
   events: Event[]
   tags: TaskTag[]
+  subjects: Subject[]
 }
 

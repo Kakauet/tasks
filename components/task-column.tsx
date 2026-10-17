@@ -28,6 +28,8 @@ interface TaskColumnProps {
   onMoveStatus?: (status: Task["status"]) => void
   sort: TaskSort
   onSortChange: (status: Task["status"], sort: TaskSort) => void
+  /** Cambia cuando se ve otra selección de tareas (por ejemplo, otra asignatura): las tarjetas se colocan sin animar. */
+  listKey?: string
 }
 
 export const TaskColumn = memo(function TaskColumn({
@@ -42,6 +44,7 @@ export const TaskColumn = memo(function TaskColumn({
   onMoveStatus,
   sort,
   onSortChange,
+  listKey,
 }: TaskColumnProps) {
   const reducedMotion = useReducedMotion()
   const [settlingTaskId, setSettlingTaskId] = useState<string | null>(null)
@@ -225,7 +228,8 @@ export const TaskColumn = memo(function TaskColumn({
         {tasks.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="space-y-2 pb-1 sm:space-y-3">
+          // Al filtrar no hay nada que «mover»: sin la clave, cada tarjeta volaría desde su posición anterior.
+          <div key={listKey} className="space-y-2 pb-1 sm:space-y-3">
             {tasks.map((task) => (
               <motion.div key={task.id} className="relative" role="listitem"
                 layout={task.id !== (draggedId ?? settlingTaskId) ? "position" : false}

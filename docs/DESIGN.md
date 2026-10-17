@@ -111,6 +111,19 @@ La unidad base es 4 px. Espacios habituales: 8, 12, 16, 20, 24 y 32 px.
 - El pie permanece estable y agrupa cancelar/guardar a la derecha; eliminar queda separado a la izquierda.
 - Los diálogos no usan glassmorphism ni fondos transparentes.
 
+### Asignaturas
+
+- Son opcionales: apagadas, no queda ni rastro en la interfaz. La barra lateral es un filtro (qué asignatura), no una navegación; las pestañas de arriba siguen siendo la vista (tablero o calendario).
+- Panel de 16 px con padding de 8 px y elementos de 8 px (radio concéntrico). Se contrae a una columna de iconos y, por debajo de `lg`, se sustituye por un selector compacto en la cabecera, junto a las pestañas: no añade filas en móvil. El resumen de la asignatura vive dentro de ese selector.
+- La franja de resumen de una asignatura es una sola fila con la misma altura que la barra de búsqueda (solo desde `md`). Los datos van por orden de importancia y solo el título del próximo plazo se recorta.
+- Movimiento: plegar, desplegar, activar y desactivar animan el ancho en 300 ms con `cubic-bezier(0.32, 0.72, 0, 1)`, sin rebote. Los iconos no se mueven; los textos se apagan antes de que el ancho los recorte y vuelven con un pequeño retraso. La selección es un único fondo que se desliza (200 ms). Cambiar de asignatura no anima el contenido: el tablero y el calendario cambian al instante, sin fundidos ni tarjetas que vuelen desde su posición anterior (la animación de reordenar queda solo para arrastrar y ordenar).
+- El estado se comunica con color **e** icono: `--status-success` con ✓ (al día) y `--status-caution` con reloj (pendiente). Nunca se tiñen fondos grandes, y el rojo queda reservado a lo vencido en las tarjetas.
+- Las notas y medias viven en un diálogo aparte (botón «Notas» al pie de la barra), no en la pantalla principal; en la franja de una asignatura solo aparece su media como un dato más.
+- Una tarea o evento muestra un chip de asignatura solo cuando se ven varias a la vez; con una asignatura filtrada sería redundante.
+- La insignia de estado de la asignatura filtrada es también su menú (como los puntos de prioridad de una tarea): «Automático» con lo que dice el cálculo, «Siempre al día» y «Siempre pendiente»; en modo manual, solo «Al día» y «Pendiente». La chincheta solo aparece cuando una asignatura está fijada a mano mientras las demás se calculan.
+- La edición de una asignatura cabe en dos filas: nombre y color; apodos y acciones. Los apodos son discretos: sin etiqueta visible (su explicación va en el `title`) y no se repiten en la lista.
+- Los apodos se editan como fichas dentro de un campo con el mismo aspecto que un `Input` (Intro o coma añaden, Retroceso en vacío quita la última). Cualquier asignación automática por título se avisa con un toast con «Deshacer».
+
 ## 6. Estados e interacción
 
 - Hover: 150 ms; puede cambiar fondo, borde o elevar 1 px.

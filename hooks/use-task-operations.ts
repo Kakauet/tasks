@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react"
 import { v4 as uuidv4 } from "uuid"
 import { addDays, differenceInCalendarDays, format, isAfter, isBefore, isSameDay, parseISO } from "date-fns"
 import {
+  cleanAliases,
   hasOwn,
   normalizeDateOnlyString,
   normalizeEventPatch,
@@ -12,13 +13,18 @@ import {
   normalizeTaskRecord,
   parsePersistedState,
   validateEvent,
+  validateSubject,
   validateTag,
   validateTask,
 } from "@/lib/tasks/model"
 import { insertTask } from "@/lib/tasks/order"
 import { generateRecurringEvents } from "@/lib/tasks/recurrence"
-import type { AppState, Event, Task, TaskStatus, TaskStep, TaskTag } from "@/lib/tasks/types"
+import type { AppState, Event, Subject, Task, TaskStatus, TaskStep, TaskTag } from "@/lib/tasks/types"
 import type { StateProducer } from "@/lib/tasks/history"
+import { applyTitleDetection, type TitleDetection } from "@/lib/tasks/subjects"
+
+/** What a subject change assigned on its own, so the caller can tell the user and offer undo. */
+export type SubjectDetection = Pick<TitleDetection, "tasks" | "events">
 
 // Absent, false and empty values mean the same thing in a saved record.
 const comparable = (value: unknown) => (value === undefined || value === false || value === "" ? null : value)
@@ -46,7 +52,7 @@ export function useTaskOperations(
   update: (producer: StateProducer) => void,
   recordChange: (state: AppState) => void,
 ) {
-  const { tasks, events, tags } = present
+  const { tasks, events, tags, subjects } = present
   const tasksByStatus = useMemo(
     () => ({
       todo: tasks.filter((task) => task.status === "todo"),
@@ -330,10 +336,105 @@ export function useTaskOperations(
         if (!state.tags.some((t) => t.id === id)) return null
         // Eliminar la etiqueta de todas las tareas y eventos
         return {
+          ...state,
           tasks: state.tasks.map((task) => (task.tags.includes(id) ? { ...task, tags: task.tags.filter((tagId) => tagId !== id) } : task)),
           events: state.events.map((event) => (event.tags.includes(id) ? { ...event, tags: event.tags.filter((tagId) => tagId !== id) } : event)),
           tags: state.tags.filter((t) => t.id !== id),
         }
+      })
+    },
+    [update],
+  )
+
+  // Asignaturas: una por tarea o evento. Borrarla nunca borra su contenido.
+  /** Its own history step, so «Deshacer» takes back the assignments and keeps the subject. */
+  const detectSubject = useCallback(
+    (id: string): SubjectDetection => {
+      let detected: SubjectDetection = { tasks: 0, events: 0 }
+      update((state) => {
+        const result = applyTitleDetection(state, { only: [id] })
+        detected = result
+        return result.state === state ? null : result.state
+      })
+      return { tasks: detected.tasks, events: detected.events }
+    },
+    [update],
+  )
+
+  const addSubject = useCallback(
+    (subject: Omit<Subject, "id">): ({ id: string } & SubjectDetection) | undefined => {
+      if (!validateSubject(subject)) {
+        console.error("Invalid subject data:", subject)
+        return undefined
+      }
+      const name = subject.name.trim()
+      const newSubject: Subject = { ...subject, name, aliases: cleanAliases(subject.aliases, name), id: uuidv4() }
+      if (!newSubject.aliases) delete newSubject.aliases
+      update((state) => ({ ...state, subjects: [...state.subjects, newSubject] }))
+      return { id: newSubject.id, ...detectSubject(newSubject.id) }
+    },
+    [update, detectSubject],
+  )
+
+  const updateSubject = useCallback(
+    (id: string, subject: Partial<Subject>): SubjectDetection => {
+      let detect = false
+      update((state) => {
+        const current = state.subjects.find((s) => s.id === id)
+        if (!current) return null
+        const patch: Partial<Subject> = { ...subject, id }
+        if (hasOwn(patch, "name")) {
+          const name = trimmedTitle(patch.name)
+          if (name) patch.name = name
+          else delete patch.name
+        }
+        if (hasOwn(patch, "color") && !trimmedTitle(patch.color)) delete patch.color
+        // A new name may repeat a nickname, so both are cleaned together.
+        if (hasOwn(patch, "aliases") || patch.name !== undefined) patch.aliases = cleanAliases(hasOwn(patch, "aliases") ? patch.aliases : current.aliases, patch.name ?? current.name)
+        if (!changesRecord(current, patch)) return null
+        const next = { ...state, subjects: state.subjects.map((s) => (s.id === id ? { ...s, ...patch } : s)) }
+        // A new name or nickname, or coming back from the archive, may match titles nobody has assigned yet.
+        const renamed = patch.name !== undefined && patch.name !== current.name
+        const restored = hasOwn(patch, "archived") && !patch.archived && !!current.archived
+        const newAliases = (patch.aliases ?? []).some((alias) => !current.aliases?.includes(alias))
+        detect = renamed || restored || newAliases
+        return next
+      })
+      return detect ? detectSubject(id) : { tasks: 0, events: 0 }
+    },
+    [update, detectSubject],
+  )
+
+  const deleteSubject = useCallback(
+    (id: string) => {
+      update((state) => {
+        if (!state.subjects.some((s) => s.id === id)) return null
+        const now = new Date().toISOString()
+        const withoutSubject = <T extends { subjectId?: string }>(record: T): T => {
+          if (record.subjectId !== id) return record
+          const { subjectId: _removed, ...rest } = record
+          return rest as T
+        }
+        return {
+          ...state,
+          tasks: state.tasks.map((task) => (task.subjectId === id ? { ...withoutSubject(task), updatedAt: now } : task)),
+          events: state.events.map(withoutSubject),
+          subjects: state.subjects.filter((s) => s.id !== id),
+        }
+      })
+    },
+    [update],
+  )
+
+  const moveSubject = useCallback(
+    (id: string, targetIndex: number) => {
+      update((state) => {
+        const from = state.subjects.findIndex((s) => s.id === id)
+        if (from === -1 || !Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= state.subjects.length || targetIndex === from) return null
+        const next = [...state.subjects]
+        const [moved] = next.splice(from, 1)
+        next.splice(targetIndex, 0, moved)
+        return { ...state, subjects: next }
       })
     },
     [update],
@@ -514,10 +615,11 @@ export function useTaskOperations(
       tasks,
       events,
       tags,
+      subjects,
       exportDate: new Date().toISOString(),
       version: "2.0",
     }
-  }, [tasks, events, tags])
+  }, [tasks, events, tags, subjects])
 
   const addTagToTask = useCallback(
     (taskId: string, tagId: string) => {
@@ -544,5 +646,5 @@ export function useTaskOperations(
     [updateTaskWith],
   )
 
-  return { importData, exportData, addTask, updateTask, deleteTask, addEvent, updateEvent, deleteEvent, addTag, updateTag, deleteTag, moveTask, reorderTasks, moveEvent, addStep, updateStep, deleteStep, addTagToTask, removeTagFromTask, addFocusTime, getEventsForDateRange, getEventsForDate, reorderSteps, bulkUpdateTasks, bulkDeleteTasks, searchTasks, filterTasksByTag, getTasksByStatus }
+  return { importData, exportData, addTask, updateTask, deleteTask, addEvent, updateEvent, deleteEvent, addTag, updateTag, deleteTag, addSubject, updateSubject, deleteSubject, moveSubject, moveTask, reorderTasks, moveEvent, addStep, updateStep, deleteStep, addTagToTask, removeTagFromTask, addFocusTime, getEventsForDateRange, getEventsForDate, reorderSteps, bulkUpdateTasks, bulkDeleteTasks, searchTasks, filterTasksByTag, getTasksByStatus }
 }

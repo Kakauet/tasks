@@ -1,25 +1,48 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useTaskContext } from "@/context/task-context"
 import { activityEnabled, activityStats, clearActivity, exportActivity, restoreActivity, setActivityEnabled, track } from "@/lib/activity"
 import { createBackup, inspectBackup, listRecovery, planImport, readPreferences, readRecovery, restorePreferences, saveRecovery, type ConflictPolicy, type ImportMode, type InspectedBackup, type Recovery } from "@/lib/data/backup"
 import { compressJson, downloadBlob, formatBytes, MAX_FILE_BYTES, readJsonBlob } from "@/lib/data/codec"
-import { Download, Loader2, Upload } from "lucide-react"
+import { ChevronDown, ClipboardPaste, Download, FileCheck2, FileUp, History, Loader2, Upload } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+
+/** Sección plegable con el mismo aspecto en exportar e importar. */
+function Disclosure({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+  return (
+    <details className="group rounded-xl border border-border/70 bg-card">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-open:text-foreground [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="flex [&_svg]:h-4 [&_svg]:w-4">{icon}</span>
+        <span className="min-w-0 flex-1">{title}</span>
+        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 transition-transform duration-150 group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-border/70 p-3">{children}</div>
+    </details>
+  )
+}
+
+const IMPORT_MODES: Array<{ value: ImportMode; title: string; hint: string }> = [
+  { value: "merge", title: "Combinar", hint: "Añade lo que falta y conserva lo que ya tienes." },
+  { value: "replace", title: "Reemplazar", hint: "Sustituye todos tus datos por los del archivo." },
+]
+const PASTED = "JSON pegado"
+const RECOVERY = "Copia de recuperación"
 
 export type DataDialogMode = "export" | "import" | null
 export function ImportExport({ mode, onModeChange, hideButtons = false }: { mode?: DataDialogMode; onModeChange?: (mode:DataDialogMode)=>void; hideButtons?:boolean }) {
-  const { tasks,events,tags,importData }=useTaskContext()
+  const { tasks,events,tags,subjects,importData }=useTaskContext()
   const [localMode,setLocalMode]=useState<DataDialogMode>(null)
   const activeMode=mode===undefined?localMode:mode
   const setMode=(value:DataDialogMode)=>{setLocalMode(value);onModeChange?.(value)}
-  const current=useMemo(()=>({tasks,events,tags}),[tasks,events,tags])
+  const current=useMemo(()=>({tasks,events,tags,subjects}),[tasks,events,tags,subjects])
   const latest=useRef(current);latest.current=current
   const request=useRef(0)
   const [busy,setBusy]=useState(false)
@@ -38,6 +61,8 @@ export function ImportExport({ mode, onModeChange, hideButtons = false }: { mode
   const [enabled,setEnabled]=useState(true)
   const [stats,setStats]=useState<{bytes:number;count:number;error:string|null}|null>(null)
   const [recoveries,setRecoveries]=useState<Recovery[]>([])
+  const [dragging,setDragging]=useState(false)
+  const fileLoaded=!!preview && !!source && source!==PASTED && source!==RECOVERY
   const plan=useMemo(()=>preview?planImport(current,preview.payload.data,importMode,policy):null,[current,preview,importMode,policy])
   const message=(value:unknown)=>value instanceof Error?value.message:"No se ha podido completar la operación."
   useEffect(()=>{
@@ -112,8 +137,8 @@ export function ImportExport({ mode, onModeChange, hideButtons = false }: { mode
             {option("backup-activity","Incluir historial de actividad local",includeActivity,setIncludeActivity)}
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">La copia incluye una comprobación de integridad. La compresión reduce su tamaño, pero no cifra el contenido. Guárdala en un lugar de confianza.</p>
-          <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Actividad local y almacenamiento</summary>
-            <div className="mt-3 space-y-3 text-sm">
+          <Disclosure icon={<History />} title="Actividad local y almacenamiento">
+            <div className="space-y-3 text-sm">
               <p className="text-muted-foreground">{stats?`${stats.count.toLocaleString()} eventos · ${formatBytes(stats.bytes)} comprimidos` : "Calculando…"}</p>
               {stats?.error && <p role="status" className="text-destructive">{stats.error}</p>}
               <p className="text-xs leading-relaxed text-muted-foreground">Acciones, tiempos de uso y métricas de interacción guardadas en este navegador, sin caducidad ni tope de entradas. Se comprimen; su capacidad depende del espacio disponible en el navegador. No se envían a la nube ni incluyen el texto de los campos. Borrar el historial no elimina las copias descargadas ni las de recuperación.</p>
@@ -121,30 +146,60 @@ export function ImportExport({ mode, onModeChange, hideButtons = false }: { mode
               <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={busy} onClick={async()=>{setBusy(true);try{const archive=await exportActivity();const gzip=typeof CompressionStream!=="undefined";downloadBlob(await compressJson({format:"taskmaster-activity",...archive}),`taskmaster-activity.json${gzip?".gz":""}`)}catch(e){setError(message(e))}finally{setBusy(false)}}}>Exportar solo actividad</Button>
                 <Button variant="outline" size="sm" disabled={busy} onClick={async()=>{setBusy(true);try{await clearActivity();setStats({bytes:0,count:0,error:null});toast.success("Historial de actividad local borrado.")}catch(e){setError(message(e))}finally{setBusy(false)}}}>Borrar historial de actividad</Button></div>
             </div>
-          </details>
+          </Disclosure>
         </div>:<div className="space-y-4">
-          <div className="space-y-2"><Label htmlFor="backup-file">Archivo de copia (.json o .json.gz)</Label>
-            <input id="backup-file" type="file" accept=".json,.gz,application/json,application/gzip" disabled={busy} className="w-full rounded-lg border border-border p-3 text-sm" onChange={event=>{const file=event.target.files?.[0];if(file)void analyze(file,file.name);event.target.value=""}} />
-          </div>
-          <details><summary className="cursor-pointer text-sm text-muted-foreground">Pegar JSON</summary><Textarea id="import-text" aria-label="Datos JSON" disabled={busy} value={text} onChange={event=>{setText(event.target.value);setPreview(null);setConfirmed(false)}} className="mt-2 h-28 font-mono text-xs" />
-            <Button className="mt-2" variant="outline" size="sm" disabled={busy||!text.trim()} onClick={()=>void analyze(new Blob([text]),"JSON pegado")}>Analizar JSON</Button></details>
-          {preview && plan && <div className="space-y-4 rounded-xl border border-border p-4">
-            <p className="break-words text-sm font-semibold">{source}</p>
-            <p className="text-xs text-muted-foreground">{preview.legacy?"Formato anterior":"Integridad verificada"}{preview.exportedAt?` · ${new Date(preview.exportedAt).toLocaleString()}`:""}</p>
-            <p className="text-sm">{preview.payload.data.tasks.length} tareas · {preview.payload.data.events.length} eventos · {preview.payload.data.tags.length} etiquetas</p>
+          <label
+            htmlFor="backup-file"
+            onDragOver={event=>{event.preventDefault();if(!busy)setDragging(true)}}
+            onDragLeave={()=>setDragging(false)}
+            onDrop={event=>{event.preventDefault();setDragging(false);const file=event.dataTransfer.files?.[0];if(file&&!busy)void analyze(file,file.name)}}
+            className={cn("flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+              dragging?"border-primary bg-primary/5":"border-border bg-muted/30 hover:border-primary/50 hover:bg-muted/50",busy&&"pointer-events-none opacity-60")}
+          >
+            <span aria-hidden="true" className="mb-1 flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-card">
+              {busy?<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />:fileLoaded?<FileCheck2 className="h-5 w-5 text-[hsl(var(--status-success))]" />:<FileUp className="h-5 w-5 text-muted-foreground" />}
+            </span>
+            <span className="max-w-full break-words text-sm font-medium">{fileLoaded?source:dragging?"Suelta el archivo aquí":"Elige una copia o suéltala aquí"}</span>
+            <span className="text-xs text-muted-foreground">{fileLoaded?"Pulsa para elegir otro archivo":"Archivo .json o .json.gz exportado desde TaskMaster"}</span>
+            <input id="backup-file" type="file" accept=".json,.gz,application/json,application/gzip" disabled={busy} className="sr-only" onChange={event=>{const file=event.target.files?.[0];if(file)void analyze(file,file.name);event.target.value=""}} />
+          </label>
+          <Disclosure icon={<ClipboardPaste />} title="Pegar el contenido en JSON">
+            <Textarea id="import-text" aria-label="Datos JSON" disabled={busy} value={text} placeholder="Pega aquí el contenido de una copia" onChange={event=>{setText(event.target.value);setPreview(null);setConfirmed(false)}} className="h-28 resize-y font-mono text-xs" />
+            <div className="mt-2 flex justify-end"><Button variant="outline" size="sm" disabled={busy||!text.trim()} onClick={()=>void analyze(new Blob([text]),PASTED)}>Analizar</Button></div>
+          </Disclosure>
+          {preview && plan && <div className="space-y-4 rounded-xl border border-border/70 bg-card p-4">
+            <div>
+              {/* El nombre del archivo ya se ve en la zona de arriba. */}
+              {!fileLoaded && <p className="break-words text-sm font-semibold">{source}</p>}
+              <p className={cn("text-xs text-muted-foreground",!fileLoaded&&"mt-0.5")}>{preview.legacy?"Formato anterior":"Integridad verificada"}{preview.exportedAt?` · ${new Date(preview.exportedAt).toLocaleString()}`:""}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/45 p-3 text-center text-xs text-muted-foreground sm:grid-cols-4">
+              {([["Tareas",preview.payload.data.tasks.length],["Eventos",preview.payload.data.events.length],["Etiquetas",preview.payload.data.tags.length],["Asignaturas",preview.payload.data.subjects?.length??0]] as const).map(([label,count])=><span key={label}><strong className="block text-base font-semibold tabular-nums text-foreground">{count}</strong>{label}</span>)}
+            </div>
             {preview.warnings.map(warning=><p key={warning} className="text-xs text-muted-foreground">{warning}</p>)}
-            <fieldset className="space-y-2"><legend className="mb-2 text-sm font-medium">Cómo importar</legend>
-              <label className="flex items-center gap-2 text-sm"><input type="radio" name="import-mode" checked={importMode==="merge"} disabled={busy} onChange={()=>{setImportMode("merge");setConfirmed(false)}} />Combinar con mis datos</label>
-              <label className="flex items-center gap-2 text-sm"><input type="radio" name="import-mode" checked={importMode==="replace"} disabled={busy} onChange={()=>{setImportMode("replace");setConfirmed(false)}} />Reemplazar mis datos</label>
+            <fieldset><legend className="mb-2 text-sm font-medium">Cómo importar</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {IMPORT_MODES.map(({value,title,hint})=>{const selected=importMode===value;return <label key={value} className={cn("flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",selected?"border-primary bg-primary/5":"border-border hover:bg-muted/50",busy&&"pointer-events-none opacity-60")}>
+                  <input type="radio" name="import-mode" value={value} checked={selected} disabled={busy} className="sr-only" onChange={()=>{setImportMode(value);setConfirmed(false)}} />
+                  <span aria-hidden="true" className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-150",selected?"border-primary":"border-muted-foreground/50")}>{selected&&<span className="h-2 w-2 rounded-full bg-primary" />}</span>
+                  <span className="min-w-0"><span className="block text-sm font-medium">{title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span></span>
+                </label>})}
+              </div>
             </fieldset>
-            {importMode==="merge" && <div className="space-y-1"><Label htmlFor="conflict-policy">Si el mismo registro tiene cambios</Label><select id="conflict-policy" value={policy} disabled={busy} onChange={event=>setPolicy(event.target.value as ConflictPolicy)} className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm"><option value="keep">Conservar mi versión actual</option><option value="incoming">Usar la versión del archivo</option></select></div>}
-            <p className="text-sm" role="status">{plan.stats.added} nuevos · {plan.stats.updated} actualizados · {plan.stats.kept} conservados · {plan.stats.removed} eliminados. {plan.stats.conflicts} conflictos detectados.</p>
-            {Object.keys(preview.payload.preferences).length>0 && option("restore-preferences","Restaurar también la apariencia",restoreAppearance,setRestoreAppearance)}
-            {!!preview.payload.activity && option("restore-activity","Reemplazar el historial de actividad por el del archivo",restoreLog,setRestoreLog)}
-            {importMode==="replace" && option("replace-confirmed","Confirmo que quiero reemplazar mis datos actuales",confirmed,setConfirmed)}
-            <p className="text-xs text-muted-foreground">Antes de importar se guardará una copia de recuperación local. Se conservan las tres últimas.</p>
+            {importMode==="merge" && <div className="grid gap-2"><Label htmlFor="conflict-policy">Si el mismo registro tiene cambios</Label>
+              <Select value={policy} disabled={busy} onValueChange={value=>setPolicy(value as ConflictPolicy)}>
+                <SelectTrigger id="conflict-policy" className="glass-input"><SelectValue /></SelectTrigger>
+                <SelectContent className="glass"><SelectItem value="keep">Conservar mi versión actual</SelectItem><SelectItem value="incoming">Usar la versión del archivo</SelectItem></SelectContent>
+              </Select></div>}
+            <p className="text-sm text-muted-foreground" role="status"><span className="text-foreground">{plan.stats.added} nuevos</span> · {plan.stats.updated} actualizados · {plan.stats.kept} conservados · {plan.stats.removed} eliminados{plan.stats.conflicts>0?` · ${plan.stats.conflicts} ${plan.stats.conflicts===1?"conflicto":"conflictos"}`:""}</p>
+            {(Object.keys(preview.payload.preferences).length>0 || !!preview.payload.activity) && <div className="space-y-2">
+              {Object.keys(preview.payload.preferences).length>0 && option("restore-preferences","Restaurar también la apariencia",restoreAppearance,setRestoreAppearance)}
+              {!!preview.payload.activity && option("restore-activity","Reemplazar el historial de actividad por el del archivo",restoreLog,setRestoreLog)}
+            </div>}
+            {importMode==="replace" && <div className="rounded-lg border border-[hsl(var(--status-danger)/0.35)] bg-[hsl(var(--status-danger)/0.06)] p-3">{option("replace-confirmed","Confirmo que quiero reemplazar mis datos actuales",confirmed,setConfirmed)}</div>}
+            <p className="text-xs text-muted-foreground">Antes de importar se guarda una copia de recuperación local. Se conservan las tres últimas.</p>
           </div>}
-          {recoveries.length>0 && <details><summary className="cursor-pointer text-sm font-medium">Recuperar una versión anterior ({recoveries.length})</summary><div className="mt-2 space-y-2">{recoveries.map(recovery=><Button key={recovery.id} variant="outline" size="sm" className="w-full justify-between" disabled={busy} onClick={async()=>{setBusy(true);setError(null);try{setPreview(await readRecovery(recovery.id));setSource("Copia de recuperación");setImportMode("replace");setConfirmed(false);setRestoreLog(false);setRestoreAppearance(false)}catch(e){setError(message(e))}finally{setBusy(false)}}}><span>{new Date(recovery.createdAt).toLocaleString()}</span><span>{formatBytes(recovery.bytes)}</span></Button>)}</div></details>}
+          {recoveries.length>0 && <Disclosure icon={<History />} title={`Recuperar una versión anterior (${recoveries.length})`}><div className="space-y-2">{recoveries.map(recovery=><Button key={recovery.id} variant="outline" size="sm" className="w-full justify-between" disabled={busy} onClick={async()=>{setBusy(true);setError(null);try{setPreview(await readRecovery(recovery.id));setSource(RECOVERY);setImportMode("replace");setConfirmed(false);setRestoreLog(false);setRestoreAppearance(false)}catch(e){setError(message(e))}finally{setBusy(false)}}}><span>{new Date(recovery.createdAt).toLocaleString()}</span><span className="text-muted-foreground">{formatBytes(recovery.bytes)}</span></Button>)}</div></Disclosure>}
         </div>}
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <DialogFooter><Button variant="outline" disabled={busy} onClick={close}>Cerrar</Button>

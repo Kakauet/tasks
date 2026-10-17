@@ -2,6 +2,8 @@
 
 import { track } from "@/lib/activity"
 import { useTaskContext, type Task, type Event as TaskEvent } from "@/context/task-context"
+import { useSubjectScope } from "@/context/subject-scope"
+import { SubjectScopeBar } from "@/components/subjects/subject-scope-bar"
 import { cn } from "@/lib/utils"
 import { differenceInCalendarDays, format, isSameDay, isSameMonth, isToday, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
@@ -39,7 +41,17 @@ import { TaskDialog } from "@/components/task-dialog"
 import { CalendarIcon, ChevronLeft, ChevronRight, Plus, PlusCircle } from "lucide-react"
 
 export function CalendarView() {
-  const { tasks, events, tags, moveEvent, deleteEvent, undo, getEventsForDate } = useTaskContext()
+  const { tasks: allTasks, events, tags, moveEvent, deleteEvent, undo, getEventsForDate: getAllEventsForDate } = useTaskContext()
+  const { scopeTasks, scopeEvents, eventColor, defaultSubjectId } = useSubjectScope()
+  const tasks = useMemo(() => scopeTasks(allTasks), [scopeTasks, allTasks])
+  // Un evento sin color propio se pinta con el de su asignatura; el dato guardado no cambia.
+  const getEventsForDate = useCallback(
+    (date: Date): TaskEvent[] => scopeEvents(getAllEventsForDate(date)).map((event) => {
+      const color = eventColor(event)
+      return color === event.color ? event : { ...event, color }
+    }),
+    [getAllEventsForDate, scopeEvents, eventColor],
+  )
   const isMobile = useIsMobile()
 
   // Estado de diálogos
@@ -87,8 +99,8 @@ export function CalendarView() {
   const selectedDateTasks = useMemo(() => (selectedDate ? getTasksForDate(selectedDate) : []), [selectedDate, getTasksForDate])
   const eventDialogDefaultValues = useMemo(() => {
     if (editingEvent) return editingEvent
-    return selectedDate ? { date: format(selectedDate, "yyyy-MM-dd") } : undefined
-  }, [editingEvent, selectedDate])
+    return selectedDate ? { date: format(selectedDate, "yyyy-MM-dd"), subjectId: defaultSubjectId } : defaultSubjectId ? { subjectId: defaultSubjectId } : undefined
+  }, [editingEvent, selectedDate, defaultSubjectId])
 
   // Efecto para manejar el evento goToToday
   useEffect(() => {
@@ -103,10 +115,10 @@ export function CalendarView() {
   // Handlers para eventos
   const handleEditEvent = useCallback(
     (event: TaskEvent) => {
-      setEditingEvent(event)
+      setEditingEvent(events.find((stored) => stored.id === event.id) ?? event)
       eventDialog.open()
     },
-    [eventDialog],
+    [eventDialog, events],
   )
 
   const handleRevealEvent = useCallback((event: TaskEvent, day: Date) => {
@@ -601,6 +613,7 @@ export function CalendarView() {
   return (
     <div className="flex flex-col gap-2 sm:gap-3 animate-in">
       <h1 className="sr-only">Calendario</h1>
+      <SubjectScopeBar />
       <CalendarEventDragLayer />
       <TooltipProvider>
         {/* Barra de herramientas */}

@@ -9,6 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { LinkifiedText } from "@/components/ui/linkified-text"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Progress } from "@/components/ui/progress"
+import { SubjectChip } from "@/components/subjects/subject-chip"
+import { useSubjectScope } from "@/context/subject-scope"
 import { TagBadge } from "@/components/ui/tag-badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { type Task, useTaskContext } from "@/context/task-context"
@@ -67,6 +69,8 @@ export const TaskCard = memo(function TaskCard({
   manualOrdering = true,
 }: TaskCardProps) {
   const { tags, updateTask } = useTaskContext()
+  const { subjectOf, scope } = useSubjectScope()
+  const showSubject = (scope === "all" || scope === "none") && !!subjectOf(task)
   const [dropPlacement, setDropPlacement] = useState<"before" | "after" | null>(null)
   const [stepsExpanded, setStepsExpanded] = useState(true)
   const [priorityOpen, setPriorityOpen] = useState(false)
@@ -344,7 +348,8 @@ export const TaskCard = memo(function TaskCard({
               <h3 className={cn("min-w-0 flex-1 basis-36 break-words text-card-title", task.status === "done" && "line-through text-muted-foreground")}>
                 {task.title}
               </h3>
-              {(dueDateInfo || taskTags.length > 0 || !!task.focusSeconds) && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
+              {(showSubject || dueDateInfo || taskTags.length > 0 || !!task.focusSeconds) && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
+              {showSubject && <SubjectChip item={task} />}
               {dueDateInfo && (
                 <div data-task-card-due-date className="shrink-0">
                   <MetadataItem

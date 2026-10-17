@@ -6,6 +6,7 @@ import { format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 
 // UI Components
+import { SubjectChip } from "@/components/subjects/subject-chip"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LinkifiedText } from "@/components/ui/linkified-text"
@@ -215,13 +216,12 @@ export function EventDetail({
               {event.recurrence.type === "yearly" && "Repetición anual"}
             </div>
           )}
-          {eventTags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {eventTags.map((tag) => (
-                <TagBadge key={tag.id} id={tag.id} name={tag.name} color={tag.color} size="sm" />
-              ))}
-            </div>
-          )}
+          <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
+            <SubjectChip item={event} />
+            {eventTags.map((tag) => (
+              <TagBadge key={tag.id} id={tag.id} name={tag.name} color={tag.color} size="sm" />
+            ))}
+          </div>
         </div>
         <div className="flex items-start">
           {event.isGraded && (
@@ -270,13 +270,12 @@ export function TaskDetail({ task, tags, onOpen }: { task: Task; tags: TaskTag[]
           {task.description && (
             <LinkifiedText text={task.description} as="p" className="text-sm text-muted-foreground" maxLinkLength={48} />
           )}
-          {taskTags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {taskTags.map((tag) => (
-                <TagBadge key={tag.id} id={tag.id} name={tag.name} color={tag.color} size="sm" />
-              ))}
-            </div>
-          )}
+          <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
+            <SubjectChip item={task} />
+            {taskTags.map((tag) => (
+              <TagBadge key={tag.id} id={tag.id} name={tag.name} color={tag.color} size="sm" />
+            ))}
+          </div>
         </div>
         <Badge
           variant={task.status === "done" ? "default" : task.status === "inProgress" ? "secondary" : "outline"}

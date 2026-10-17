@@ -6,7 +6,7 @@ const { createDefaultState } = require('../lib/tasks/model.ts');
 const task = (id, fields = {}) => ({ id, title: id, description: '', status: 'todo', priority: 'medium', steps: [], tags: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...fields });
 const event = (id, fields = {}) => ({ id, title: id, description: '', date: '2026-01-05', tags: [], isGraded: false, ...fields });
 const tag = (id, name = id) => ({ id, name, color: '#3b82f6' });
-const state = (tasks = [], events = [], tags = []) => ({ tasks, events, tags });
+const state = (tasks = [], events = [], tags = [], subjects = []) => ({ tasks, events, tags, subjects });
 const edit = (record, fields) => ({ ...record, ...fields });
 const ids = records => records.map(record => record.id);
 

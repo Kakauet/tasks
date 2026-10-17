@@ -4,7 +4,7 @@ const { syncOnce } = require('../lib/sync/round.ts');
 const { sameState } = require('../lib/sync/merge.ts');
 
 const task = (id, fields = {}) => ({ id, title: id, description: '', status: 'todo', priority: 'medium', steps: [], tags: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...fields });
-const state = (...tasks) => ({ tasks, events: [], tags: [] });
+const state = (...tasks) => ({ tasks, events: [], tags: [], subjects: [] });
 const version = '2099-01-01T00:00:00.000Z';
 const copy = value => structuredClone(value);
 
@@ -173,4 +173,31 @@ test('account changes during a read abort before applying data, and account swit
   assert.ok(sameState(d.state, remote));
   assert.equal(db.writes, 0);
   assert.equal(d.base.userId, 'user');
+});
+
+test('a cloud copy written by a version without subjects keeps the subjects and their assignments', async () => {
+  const subject = { id: 's1', name: 'Castellano', color: '#3b82f6' };
+  const original = { ...state(task('a', { subjectId: 's1' })), subjects: [subject] };
+  const db = cloud(original);
+  // The old version keeps unknown task fields but uploads no `subjects` list.
+  const { subjects: _dropped, ...legacy } = copy(original);
+  legacy.tasks.push(task('b'));
+  db.row.data = legacy;
+  db.row.updated_at = '2099-01-02T00:00:00.000Z';
+  const d = device(copy(original), baseFor(original));
+  assert.equal(await run(db, d), 'done');
+  assert.deepEqual(d.state.subjects, [subject]);
+  assert.equal(d.state.tasks.find(t => t.id === 'a').subjectId, 's1');
+  assert.ok(d.state.tasks.some(t => t.id === 'b'));
+  assert.deepEqual(db.row.data.subjects, [subject], 'the list is written back for updated devices');
+});
+
+test('a first sync against a cloud copy without subjects keeps the subjects of this device', async () => {
+  const subject = { id: 's1', name: 'Física', color: '#22c55e' };
+  const db = cloud(state(task('cloud')));
+  delete db.row.data.subjects;
+  const d = device({ ...state(task('local', { subjectId: 's1' })), subjects: [subject] });
+  assert.equal(await run(db, d), 'done');
+  assert.deepEqual(d.state.subjects, [subject]);
+  assert.equal(d.state.tasks.find(t => t.id === 'local').subjectId, 's1');
 });

@@ -181,7 +181,7 @@ export async function restoreActivity(raw: ActivityArchive) {
 /** Content stays in the app data. The interaction journal records only structural changes. */
 export function trackStateChange(before: AppState, after: AppState) {
   if (typeof window === "undefined" || !activityEnabled()) return
-  for (const kind of ["tasks", "events", "tags"] as const) {
+  for (const kind of ["tasks", "events", "tags", "subjects"] as const) {
     if (before[kind] === after[kind]) continue
     const old = new Map(before[kind].map(item => [item.id, item]))
     const nextIds = new Set(after[kind].map(item => item.id))

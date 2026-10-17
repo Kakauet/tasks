@@ -3,6 +3,8 @@
 import type React from "react"
 
 import { ColorPicker } from "@/components/color-picker"
+import { SubjectField } from "@/components/subjects/subject-field"
+import { useSubjectScope } from "@/context/subject-scope"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -26,11 +28,15 @@ import { formDialogStyles } from "@/components/ui/form-dialog-styles"
 import { useTaskContext, type Event, type RecurrenceType } from "@/context/task-context"
 import { cn } from "@/lib/utils"
 import { MAX_OCCURRENCES } from "@/lib/tasks/recurrence"
+import { findSubjectInTitle, looksLikeExam } from "@/lib/tasks/subjects"
 import { addDays, format, isBefore, parseISO, startOfDay } from "date-fns"
 import { es } from "date-fns/locale"
 import { CalendarDays, CalendarIcon, Clock, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+
+const DEFAULT_EVENT_COLOR = "#3b82f6"
+const isCustomColor = (color?: string) => !!color && color.toLowerCase() !== DEFAULT_EVENT_COLOR
 
 interface EventDialogProps {
   open: boolean
@@ -64,7 +70,7 @@ const saveCustomColor = (color: string) => {
 }
 
 export function EventDialog({ open, onOpenChange, defaultValues, mode = "create" }: EventDialogProps) {
-  const { addEvent, updateEvent, deleteEvent, undo, tags } = useTaskContext()
+  const { addEvent, updateEvent, deleteEvent, undo, tags, subjects } = useTaskContext()
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [titleError, setTitleError] = useState<string | null>(null)
@@ -83,7 +89,13 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
   const [isGraded, setIsGraded] = useState(defaultValues?.isGraded || false)
   const [grade, setGrade] = useState(defaultValues?.grade || "")
   const [selectedTags, setSelectedTags] = useState<string[]>(defaultValues?.tags || [])
-  const [eventColor, setEventColor] = useState(defaultValues?.color || "#3b82f6")
+  const [eventColor, setEventColor] = useState(defaultValues?.color || DEFAULT_EVENT_COLOR)
+  const [subjectId, setSubjectId] = useState<string | undefined>(defaultValues?.subjectId)
+  // Mientras el color no se elija a mano, un evento con asignatura usa el de la asignatura.
+  const [colorTouched, setColorTouched] = useState(isCustomColor(defaultValues?.color))
+  // En un evento nuevo, el título decide si es calificable y de qué asignatura es, hasta que se toque a mano.
+  const [gradedTouched, setGradedTouched] = useState(false)
+  const [subjectTouched, setSubjectTouched] = useState(false)
   const [customColors, setCustomColors] = useState<string[]>([])
 
   // Recurrence state
@@ -104,6 +116,18 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
 
   // Dentro del componente EventDialog, añadir validación para fechas y horas
   const [timeError, setTimeError] = useState<string | null>(null)
+  const { enabled: subjectsEnabled } = useSubjectScope()
+  const subject = subjectsEnabled ? subjects.find((item) => item.id === subjectId) : undefined
+  const followsSubject = !!subject && !colorTouched
+  const autoCreate = mode === "create"
+  const autoSubject = autoCreate && subjectsEnabled && !subjectTouched && !!subject && !!findSubjectInTitle(title, subjects)
+
+  const handleTitleChange = (value: string) => {
+    setTitle(value)
+    if (!autoCreate) return
+    if (!gradedTouched) setIsGraded(looksLikeExam(value))
+    if (!subjectTouched && subjectsEnabled) setSubjectId(findSubjectInTitle(value, subjects)?.id ?? defaultValues?.subjectId)
+  }
   const lastInitKeyRef = useRef<string | null>(null)
 
   // Cargar colores personalizados al abrir el diálogo
@@ -146,7 +170,11 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
       setIsGraded(defaultValues.isGraded || false)
       setGrade(defaultValues.grade || "")
       setSelectedTags(defaultValues.tags || [])
-      setEventColor(defaultValues.color || "#3b82f6")
+      setEventColor(defaultValues.color || DEFAULT_EVENT_COLOR)
+      setSubjectId(defaultValues.subjectId)
+      setColorTouched(isCustomColor(defaultValues.color))
+      setGradedTouched(false)
+      setSubjectTouched(false)
 
       setRecurrenceTab(defaultValues.recurrence?.type !== "none" && defaultValues.recurrence ? "recurrence" : "none")
       setRecurrenceType(defaultValues.recurrence?.type || "none")
@@ -168,7 +196,11 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
       setIsGraded(false)
       setGrade("")
       setSelectedTags([])
-      setEventColor("#3b82f6")
+      setEventColor(DEFAULT_EVENT_COLOR)
+      setSubjectId(undefined)
+      setColorTouched(false)
+      setGradedTouched(false)
+      setSubjectTouched(false)
       setRecurrenceTab("none")
       setRecurrenceType("none")
       setRecurrenceInterval(1)
@@ -232,7 +264,8 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
       isGraded,
       grade: isGraded ? grade : undefined,
       tags: selectedTags,
-      color: eventColor,
+      subjectId,
+      color: followsSubject ? undefined : eventColor,
       recurrence: undefined,
     }
 
@@ -286,6 +319,7 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
   // Manejar la adición de un color personalizado
   const handleColorChange = (color: string) => {
     setEventColor(color)
+    setColorTouched(true)
   }
 
   return (
@@ -312,7 +346,7 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
                 id="event-title"
                 value={title}
                 onChange={(e) => {
-                  setTitle(e.target.value)
+                  handleTitleChange(e.target.value)
                   if (titleError) setTitleError(null)
                 }}
                 placeholder="Ej: Examen de Historia"
@@ -335,6 +369,9 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
                 className="glass-input min-h-[76px] max-h-60"
               />
             </div>
+
+            <SubjectField id="event-subject" value={subjectId} onChange={(next) => { setSubjectTouched(true); setSubjectId(next) }}
+              hint={autoSubject ? "Detectada por el título." : undefined} />
 
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
@@ -511,18 +548,23 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
 
             <div className="grid gap-2">
               <Label htmlFor="eventColor">Color del evento</Label>
-              <ColorPicker
-                selectedColor={eventColor}
-                onColorChange={handleColorChange}
-                customColors={customColors}
-                setCustomColors={setCustomColors}
-              />
+              <div className="flex flex-wrap items-center gap-3">
+                <ColorPicker
+                  selectedColor={followsSubject && subject ? subject.color : eventColor}
+                  onColorChange={handleColorChange}
+                  customColors={customColors}
+                  setCustomColors={setCustomColors}
+                />
+                {subject && (followsSubject
+                  ? <span className="text-xs text-muted-foreground">Usa el color de {subject.name}.</span>
+                  : <button type="button" onClick={() => setColorTouched(false)} className="rounded-md text-xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Volver al color de {subject.name}</button>)}
+              </div>
             </div>
 
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="isGraded">Evento calificable</Label>
-                <Switch id="isGraded" checked={isGraded} onCheckedChange={setIsGraded} />
+                <Switch id="isGraded" checked={isGraded} onCheckedChange={(checked) => { setGradedTouched(true); setIsGraded(checked) }} />
               </div>
               {isGraded && (
                 <div className="grid gap-2">

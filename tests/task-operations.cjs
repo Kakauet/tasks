@@ -7,7 +7,7 @@ const { createHistory, recordHistory, undoHistory, redoHistory } = require('../l
 
 const task = (id, fields = {}) => ({ id, title: id, description: '', status: 'todo', priority: 'medium', steps: [], tags: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...fields });
 const event = (id, fields = {}) => ({ id, title: id, description: '', date: '2026-01-05', isGraded: false, tags: [], ...fields });
-const state = (tasks = [], events = [], tags = []) => ({ tasks, events, tags });
+const state = (tasks = [], events = [], tags = [], subjects = []) => ({ tasks, events, tags, subjects });
 
 // React's existing server renderer supplies hooks; commands write to the same pure history used in production.
 // No DOM, timers, mock dispatcher or additional test framework is needed.

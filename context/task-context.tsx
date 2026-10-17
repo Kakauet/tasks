@@ -2,15 +2,16 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react"
 import { useTaskHistory } from "@/hooks/use-task-history"
-import { useTaskOperations } from "@/hooks/use-task-operations"
+import { useTaskOperations, type SubjectDetection } from "@/hooks/use-task-operations"
 import { useTaskSync, type SyncState } from "@/hooks/use-task-sync"
-import type { Event, Task, TaskStatus, TaskStep, TaskTag } from "@/lib/tasks/types"
+import type { Event, Subject, Task, TaskStatus, TaskStep, TaskTag } from "@/lib/tasks/types"
 export type { SyncState, SyncStatus } from "@/hooks/use-task-sync"
 export type {
   AppState,
   Event,
   EventRecurrence,
   RecurrenceType,
+  Subject,
   Task,
   TaskPriority,
   TaskStatus,
@@ -26,11 +27,13 @@ interface TaskContextType {
   tasks: Task[]
   events: Event[]
   tags: TaskTag[]
+  subjects: Subject[]
   importData: (data: unknown) => void
   exportData: () => {
     tasks: Task[]
     events: Event[]
     tags: TaskTag[]
+    subjects: Subject[]
     exportDate: string
     version: string
   }
@@ -43,6 +46,11 @@ interface TaskContextType {
   addTag: (tag: Omit<TaskTag, "id">) => void
   updateTag: (id: string, tag: Partial<TaskTag>) => void
   deleteTag: (id: string) => void
+  /** Also assigns the unassigned tasks and events whose title names the subject. */
+  addSubject: (subject: Omit<Subject, "id">) => ({ id: string } & SubjectDetection) | undefined
+  updateSubject: (id: string, subject: Partial<Subject>) => SubjectDetection
+  deleteSubject: (id: string) => void
+  moveSubject: (id: string, targetIndex: number) => void
   moveTask: (id: string, status: TaskStatus, targetIndex?: number) => void
   reorderTasks: (status: TaskStatus, sourceIndex: number, targetIndex: number) => void
   moveEvent: (id: string, newDate: string) => void
@@ -71,7 +79,7 @@ const TaskContext = createContext<TaskContextType | undefined>(undefined)
 export function TaskProvider({ children }: { children: ReactNode }) {
   const { present, historyRef, resetState, update, recordChange, canUndo, canRedo, undo, redo } = useTaskHistory()
   const { isLoading, syncState, syncNow } = useTaskSync(present, historyRef, resetState)
-  const { tasks, events, tags } = present
+  const { tasks, events, tags, subjects } = present
   const {
     importData,
     exportData,
@@ -84,6 +92,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     addTag,
     updateTag,
     deleteTag,
+    addSubject,
+    updateSubject,
+    deleteSubject,
+    moveSubject,
     moveTask,
     reorderTasks,
     moveEvent,
@@ -111,6 +123,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       tasks,
       events,
       tags,
+      subjects,
       importData,
       exportData,
       addTask,
@@ -122,6 +135,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       addTag,
       updateTag,
       deleteTag,
+      addSubject,
+      updateSubject,
+      deleteSubject,
+      moveSubject,
       moveTask,
       reorderTasks,
       moveEvent,
@@ -151,6 +168,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       tasks,
       events,
       tags,
+      subjects,
       importData,
       exportData,
       addTask,
@@ -162,6 +180,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       addTag,
       updateTag,
       deleteTag,
+      addSubject,
+      updateSubject,
+      deleteSubject,
+      moveSubject,
       moveTask,
       reorderTasks,
       moveEvent,

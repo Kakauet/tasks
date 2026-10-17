@@ -26,11 +26,21 @@ Está hecha a mi medida, con una forma de organizar las cosas que me resulta có
 
 También tiene deshacer/rehacer, acciones en bloque y opciones de apariencia. El tablero se puede usar tanto con ratón como desde el móvil.
 
+## Asignaturas
+
+Son opcionales y se activan en Configuración. Con ellas, cada tarea y cada evento puede ir a una asignatura, y puedo filtrar el tablero y el calendario para ver solo lo de una. En el ordenador salen en una barra a la izquierda; en el móvil, en un selector junto a las pestañas para no ocupar más sitio.
+
+Cada asignatura indica si voy al día. Por defecto lo estoy cuando no me quedan tareas de prioridad media o alta, pero el criterio se puede cambiar, y si prefiero decidirlo yo, basta con tocar el estado y elegirlo.
+
+Casi nunca tengo que asignarlas a mano: si el título lleva el nombre de la asignatura o uno de sus apodos (por ejemplo «Filo» para Filosofía), la tarea o el evento va a esa asignatura, y si lleva «examen» cuenta como examen. Al crear una asignatura nueva también recoge lo que ya tenía apuntado con ese nombre. Las notas de los exámenes se ven juntas en Notas, con la media de cada asignatura.
+
 ## Tus datos
 
 Se puede usar sin cuenta. Las tareas y los eventos se guardan en el navegador con IndexedDB; para conservar una copia fuera de ese navegador puedes exportarlos en JSON o gzip e importarlos después.
 
 La sincronización entre dispositivos es opcional y usa Supabase. Si no la configuras, la aplicación sigue funcionando en modo local. Los detalles sobre copias de seguridad, recuperación y registro local de actividad están en [Datos y actividad](docs/DATA_AND_ACTIVITY.md).
+
+Las actualizaciones no tocan lo que ya tienes: los datos y las copias de versiones anteriores se cargan igual, y si otro dispositivo sigue con la versión antigua abierta, sincronizar con él no borra las asignaturas.
 
 ## Probarla en local
 

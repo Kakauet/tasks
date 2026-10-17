@@ -23,12 +23,15 @@ Estos campos contienen el contenido que el usuario ya guarda en la aplicación, 
 
 | Tipo | Campos |
 | --- | --- |
-| Tarea | `id`, `title`, `description`, `status`, `priority`, `dueDate`, `weeklyPlanDate`, `weeklyPlanOrder`, `steps`, `tags`, `focusSeconds`, `focusSessions`, `createdAt`, `updatedAt` |
+| Tarea | `id`, `title`, `description`, `status`, `priority`, `dueDate`, `weeklyPlanDate`, `weeklyPlanOrder`, `steps`, `tags`, `subjectId`, `focusSeconds`, `focusSessions`, `createdAt`, `updatedAt` |
 | Paso | `id`, `text`, `completed` |
-| Evento | `id`, `title`, `description`, `date`, `endDate`, `startTime`, `endTime`, `isAllDay`, `isMultiDay`, `isGraded`, `grade`, `tags`, `recurrence`, `parentEventId`, `color` |
+| Evento | `id`, `title`, `description`, `date`, `endDate`, `startTime`, `endTime`, `isAllDay`, `isMultiDay`, `isGraded`, `grade`, `tags`, `subjectId`, `recurrence`, `parentEventId`, `color` |
 | Repetición | `type`, `interval`, `endDate`, `occurrences` |
 | Etiqueta | `id`, `name`, `color` |
+| Asignatura | `id`, `name`, `color`, `archived`, `manual`, `aliases` |
 | Apariencia opcional | Tema claro/oscuro/sistema, preset de acento, preset oscuro y colores de las columnas |
+
+La lista `subjects` y el campo `subjectId` son opcionales: las copias y los datos guardados antes de las asignaturas se leen como «sin asignaturas». Una referencia a una asignatura que no existe se muestra como «sin asignatura» y se conserva por si la copia se combina con otra. La preferencia de mostrar o no la función es local del dispositivo y no viaja en las copias. Una copia en la nube escrita por una versión anterior, sin la lista `subjects`, no borra las asignaturas: se conserva la lista conocida y se vuelve a subir completa. Al abrir por primera vez la versión con asignaturas, los eventos con «examen» en el título pasan a ser calificables (una vez por dispositivo).
 
 Los campos opcionales se conservan cuando corresponden al estado normalizado de la aplicación. No se incluyen credenciales, sesión de Supabase, cachés, historial de deshacer/rehacer ni filtros transitorios como ajustes restaurables.
 
@@ -61,8 +64,9 @@ Los identificadores de tareas y etiquetas se sustituyen por una clave de 8 carac
 | `dialog.open`, `dialog.close` | Cantidad de diálogos abiertos tras el cambio observado. |
 | `tasks.create`, `tasks.update` | Clave de tarea, nombres de campos modificados, longitudes de título/descripción, número de etiquetas, estado, prioridad, cantidad de pasos y pasos completados, si tiene vencimiento y planificación semanal. En modificaciones: estado y prioridad anteriores. |
 | `events.create`, `events.update` | Clave de evento, nombres de campos modificados, longitudes de título/descripción, número de etiquetas, indicadores de día completo, varios días, repetición, evaluable y presencia de nota. |
+| `subjects.create`, `subjects.update` | Clave de asignatura y nombres de campos modificados. No guarda su nombre ni color como valores de actividad. |
 | `tags.create`, `tags.update` | Clave de etiqueta y nombres de campos modificados. No guarda su nombre ni color como valores de actividad. |
-| `tasks.delete`, `events.delete`, `tags.delete` | Clave del registro eliminado. |
+| `tasks.delete`, `events.delete`, `tags.delete`, `subjects.delete` | Clave del registro eliminado. |
 | `data.change` | Tipo de colección, cantidad de registros creados/modificados, eliminados y total posterior; si cambió la secuencia de identificadores de la colección, incluidas altas/bajas. |
 | `history.undo`, `history.redo` | Uso de deshacer/rehacer, además de los cambios estructurales resultantes. |
 | `board.filter` | Longitud de búsqueda, claves de hasta 100 etiquetas seleccionadas, cantidad total de etiquetas seleccionadas, prioridades y número de resultados. No guarda la búsqueda. |

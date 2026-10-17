@@ -18,4 +18,5 @@ require('../tests/data-and-activity.cjs');
 require('../tests/sync.cjs');
 require('../tests/sync-round.cjs');
 require('../tests/task-operations.cjs');
+require('../tests/subjects.cjs');
 require('../tests/sync-lifecycle.cjs');

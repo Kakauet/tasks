@@ -2,6 +2,9 @@
 
 import type React from "react"
 
+import { SubjectField } from "@/components/subjects/subject-field"
+import { useSubjectScope } from "@/context/subject-scope"
+import { findSubjectInTitle } from "@/lib/tasks/subjects"
 import { TagBadge } from "@/components/ui/tag-badge"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { Button } from "@/components/ui/button"
@@ -40,6 +43,8 @@ interface TaskDialogProps {
   onOpenChange: (open: boolean) => void
   defaultValues?: Partial<Task>
   initialStatus?: Task["status"]
+  /** Asignatura con la que empieza una tarea nueva. */
+  initialSubjectId?: string
   mode?: "create" | "edit"
 }
 
@@ -48,10 +53,12 @@ export function TaskDialog({
   onOpenChange,
   defaultValues,
   initialStatus = "todo",
+  initialSubjectId,
   mode = "create",
 }: TaskDialogProps) {
   // Modificar la función handleSubmit para incluir la nueva funcionalidad
-  const { addTask, updateTask, deleteTask, undo, tags } = useTaskContext()
+  const { addTask, updateTask, deleteTask, undo, tags, subjects } = useTaskContext()
+  const { enabled: subjectsEnabled } = useSubjectScope()
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -72,11 +79,17 @@ export function TaskDialog({
   const [draftStep, setDraftStep] = useState("")
   const draftStepRef = useRef("")
   const [selectedTags, setSelectedTags] = useState<string[]>(defaultValues?.tags || [])
+  const [subjectId, setSubjectId] = useState<string | undefined>(defaultValues?.subjectId ?? (defaultValues ? undefined : initialSubjectId))
+  // Al crear, la asignatura sigue al título hasta que se elige a mano.
+  const [subjectTouched, setSubjectTouched] = useState(false)
+  const detectsSubject = mode === "create" && subjectsEnabled && !subjectTouched
+  const autoSubject = detectsSubject && !!subjectId && findSubjectInTitle(title, subjects)?.id === subjectId
 
   useEffect(() => {
     if (open) {
       saveStartedRef.current = false
       setTitleError(null)
+      setSubjectTouched(false)
       // Reset form fields based on mode and defaultValues
       if (mode === "create" && !defaultValues) {
         // Clear all fields for new task creation
@@ -90,6 +103,7 @@ export function TaskDialog({
         setDraftStep("")
         draftStepRef.current = ""
         setSelectedTags([])
+        setSubjectId(initialSubjectId)
       } else if (defaultValues) {
         // Populate fields for editing
         setTitle(defaultValues.title || "")
@@ -103,9 +117,10 @@ export function TaskDialog({
         setDraftStep("")
         draftStepRef.current = ""
         setSelectedTags(defaultValues.tags || [])
+        setSubjectId(defaultValues.subjectId)
       }
     }
-  }, [open, defaultValues, initialStatus, mode])
+  }, [open, defaultValues, initialStatus, initialSubjectId, mode])
 
   const handleDraftStepChange = (text: string) => {
     draftStepRef.current = text
@@ -145,6 +160,7 @@ export function TaskDialog({
       dueDate: dueDate ? format(dueDate, "yyyy-MM-dd") : undefined,
       steps: commitDraftStep(),
       tags: selectedTags,
+      subjectId,
     }
 
     if (mode === "edit" && defaultValues?.id) {
@@ -248,6 +264,7 @@ export function TaskDialog({
                 onChange={(e) => {
                   setTitle(e.target.value)
                   if (titleError) setTitleError(null)
+                  if (detectsSubject) setSubjectId(findSubjectInTitle(e.target.value, subjects)?.id ?? defaultValues?.subjectId ?? initialSubjectId)
                 }}
                 placeholder="Ej: Repasar tema 3 de Biología"
                 required
@@ -269,6 +286,8 @@ export function TaskDialog({
                 className="min-h-[76px] max-h-60 glass-input"
               />
             </div>
+            <SubjectField id="subject" value={subjectId} onChange={(next) => { setSubjectTouched(true); setSubjectId(next) }}
+              hint={autoSubject ? "Detectada por el título." : undefined} />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="status">Estado</Label>

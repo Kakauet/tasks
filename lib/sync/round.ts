@@ -12,6 +12,16 @@ const nextVersion = (previous: string | null) => {
   return new Date(Number.isFinite(previousTime) ? Math.max(Date.now(), previousTime + 1) : Date.now()).toISOString()
 }
 
+/**
+ * Versions older than subjects upload the state without its `subjects` list (tasks and events keep
+ * their `subjectId`). A missing list means "not known", not "all deleted": it is read as unchanged
+ * since the last merge, so the subjects and every assignment survive a device that is not updated yet.
+ */
+export function withoutLegacyGaps(raw: unknown, remote: AppState, known: AppState): AppState {
+  const hasSubjects = typeof raw === "object" && raw !== null && Array.isArray((raw as { subjects?: unknown }).subjects)
+  return hasSubjects ? remote : { ...remote, subjects: known.subjects }
+}
+
 /** Effects are supplied by the lifecycle hook; this round has no React or browser dependency. */
 export interface SyncPorts {
   isActive: () => boolean
@@ -48,10 +58,13 @@ export async function syncOnce(client: SupabaseClient, uid: string, ports: SyncP
     .maybeSingle()
   if (error) throw error
   if (!active()) return "aborted"
-  const remote = row ? repairPersistedState(row.data) : null
-  if (row && !remote) throw new Error("La copia de la nube no tiene un formato válido y no se ha modificado.")
+  const repaired = row ? repairPersistedState(row.data) : null
+  if (row && !repaired) throw new Error("La copia de la nube no tiene un formato válido y no se ha modificado.")
 
   const base = ports.getBase()
+  // Another account's data on this device is never used to fill in this account's gaps.
+  const fallback = base ? (base.userId === uid ? base.state : null) : ports.getState()
+  const remote = repaired && fallback ? withoutLegacyGaps(row?.data, repaired, fallback) : repaired
   if (base && base.userId !== uid && !isBlankState(ports.getState())) {
     // This device holds the data of another account: keep it aside before switching to this account's data.
     await ports.preserveAccountState(ports.getState())
@@ -74,7 +87,8 @@ export async function syncOnce(client: SupabaseClient, uid: string, ports: SyncP
   }
 
   let version: string | null = row?.updated_at ?? null
-  if (!remote || !sameState(merged, remote)) {
+  // A filled-in gap is uploaded too, so the cloud copy carries the full state again.
+  if (!remote || remote !== repaired || !sameState(merged, remote)) {
     const updatedAt = nextVersion(version)
     const request = row
       ? client

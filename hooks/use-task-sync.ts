@@ -8,6 +8,7 @@ import { createBackup, saveRecovery } from "@/lib/data/backup"
 import { sameState } from "@/lib/sync/merge"
 import { REMOTE_STATE_TABLE, syncOnce } from "@/lib/sync/round"
 import { loadLocalState, saveLocalState, type SyncBase } from "@/lib/tasks/storage"
+import { applyTitleDetection, describeDetection } from "@/lib/tasks/subjects"
 import type { AppState } from "@/lib/tasks/types"
 
 const SYNC_DEBOUNCE_MS = 800
@@ -16,6 +17,30 @@ const MIN_RETRY_DELAY = 2_000
 const MAX_RETRY_DELAY = 60_000
 const MAX_SYNC_ATTEMPTS = 5
 let lastStorageWarning = 0
+const TITLE_DETECTION_KEY = "taskmaster-title-detection"
+
+/**
+ * Data saved before title detection existed gets it once per device: exams become graded and
+ * existing subjects take the unassigned items that name them. Later choices are never revisited.
+ */
+function detectTitlesOnce(state: AppState): AppState {
+  try {
+    if (localStorage.getItem(TITLE_DETECTION_KEY)) return state
+    // A device with nothing yet waits for real data, which may still arrive from the cloud.
+    if (state.tasks.length === 0 && state.events.length === 0) return state
+    localStorage.setItem(TITLE_DETECTION_KEY, "1")
+  } catch {
+    return state
+  }
+  const result = applyTitleDetection(state, { exams: true })
+  const assigned = describeDetection(result)
+  const notes = [
+    result.exams && `${result.exams} ${result.exams === 1 ? "examen marcado como calificable" : "exámenes marcados como calificables"}`,
+    assigned && `${assigned} ${result.tasks + result.events === 1 ? "asignado" : "asignados"} a su asignatura por el título`,
+  ].filter(Boolean)
+  if (notes.length) toast.success(`${notes.join(" y ")}.`, { duration: 8000 })
+  return result.state
+}
 
 export type SyncStatus = "disabled" | "pending" | "synced" | "offline" | "error"
 export interface SyncState {
@@ -73,7 +98,8 @@ export function useTaskSync(
         if (cancelled) return
         syncBaseRef.current = syncBase ?? null
         appliedStateRef.current = state
-        resetState(state)
+        // Unlike `state`, the detected version counts as a local change and is uploaded.
+        resetState(detectTitlesOnce(state))
       })
       .catch((error) => console.error("Error loading initial state:", error))
       .finally(() => {

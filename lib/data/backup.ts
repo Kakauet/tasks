@@ -45,17 +45,21 @@ function cleanState(raw: unknown): { data: AppState; warnings: string[] } {
   const select = <T extends object>(item:T, keys: string[]) => Object.fromEntries(keys.filter(k=>Object.prototype.hasOwnProperty.call(item,k)).map(k=>[k,(item as Record<string,unknown>)[k]])) as T
   // Only documented fields can enter the live application state.
   const data:AppState={
-    tasks:parsed.tasks.map(t=>({...select(t,["id","title","description","status","priority","dueDate","weeklyPlanDate","weeklyPlanOrder","tags","focusSeconds","focusSessions","createdAt","updatedAt"]),steps:t.steps.map(s=>select(s,["id","text","completed"]))})),
-    events:parsed.events.map(e=>({...select(e,["id","title","description","date","endDate","startTime","endTime","isAllDay","isMultiDay","isGraded","grade","tags","parentEventId","color"]),...(e.recurrence?{recurrence:select(e.recurrence,["type","interval","endDate","occurrences"])}:{})})),
+    tasks:parsed.tasks.map(t=>({...select(t,["id","title","description","status","priority","dueDate","weeklyPlanDate","weeklyPlanOrder","tags","subjectId","focusSeconds","focusSessions","createdAt","updatedAt"]),steps:t.steps.map(s=>select(s,["id","text","completed"]))})),
+    events:parsed.events.map(e=>({...select(e,["id","title","description","date","endDate","startTime","endTime","isAllDay","isMultiDay","isGraded","grade","tags","subjectId","parentEventId","color"]),...(e.recurrence?{recurrence:select(e.recurrence,["type","interval","endDate","occurrences"])}:{})})),
     tags:parsed.tags.map(t=>select(t,["id","name","color"])),
+    subjects:parsed.subjects.map(s=>select(s,["id","name","color","archived","manual","aliases"])),
   }
   for(const t of data.tasks) if(new Set(t.steps.map(s=>s.id)).size!==t.steps.length) throw new Error("Hay pasos con identificadores duplicados en una tarea.")
   const tagIds=new Set(data.tags.map(t=>t.id))
   const missingTags=new Set([...data.tasks,...data.events].flatMap(t=>t.tags).filter(id=>!tagIds.has(id)))
+  const subjectIds=new Set(data.subjects.map(s=>s.id))
+  const missingSubjects=new Set([...data.tasks,...data.events].map(t=>t.subjectId).filter((id):id is string=>!!id && !subjectIds.has(id)))
   const eventIds=new Set(data.events.map(e=>e.id))
   const missingParents=data.events.filter(e=>e.parentEventId && !eventIds.has(e.parentEventId)).length
   const warnings:string[]=[]
   if(missingTags.size) warnings.push(`${missingTags.size} etiquetas referenciadas no están en esta copia; las referencias se conservan para poder combinarla con tus datos.`)
+  if(missingSubjects.size) warnings.push(`${missingSubjects.size} asignaturas referenciadas no están en esta copia; esas tareas y eventos se mostrarán sin asignatura.`)
   if(missingParents) warnings.push(`${missingParents} eventos recurrentes no incluyen su evento de origen.`)
   return {data,warnings}
 }
@@ -85,7 +89,7 @@ export async function inspectBackup(raw:unknown):Promise<InspectedBackup> {
 }
 
 export function planImport(current:AppState, incoming:AppState, mode:ImportMode, policy:ConflictPolicy) {
-  const result:AppState={tasks:[],events:[],tags:[]}
+  const result:AppState={tasks:[],events:[],tags:[],subjects:[]}
   const stats={added:0,conflicts:0,updated:0,kept:0,removed:0}
   const merge = <T extends {id:string}>(localItems:T[], incomingItems:T[]):T[] => {
     const local=new Map(localItems.map(item=>[item.id,item]))
@@ -103,6 +107,7 @@ export function planImport(current:AppState, incoming:AppState, mode:ImportMode,
   result.tasks=merge(current.tasks,incoming.tasks)
   result.events=merge(current.events,incoming.events)
   result.tags=merge(current.tags,incoming.tags)
+  result.subjects=merge(current.subjects,incoming.subjects)
   return {data:result,stats}
 }
 

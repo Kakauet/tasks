@@ -1,6 +1,6 @@
 import { format, isValid, parseISO } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
-import type { AppState, Event, EventRecurrence, Task, TaskTag } from "./types";
+import type { AppState, Event, EventRecurrence, Subject, Task, TaskTag } from "./types";
 
 export const DEFAULT_TAG_TEMPLATES: Array<{ name: string; color: string }> = [
   { name: "Trabajo", color: "#3b82f6" },
@@ -21,6 +21,7 @@ export const createDefaultState = (): AppState => ({
   tasks: [],
   events: [],
   tags: createDefaultTags(),
+  subjects: [],
 })
 
 export const hasOwn = (value: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key)
@@ -121,8 +122,11 @@ export const parsePersistedState = (raw: unknown): AppState | null => {
   if (!Array.isArray(candidate.tasks) || !Array.isArray(candidate.events) || !Array.isArray(candidate.tags)) {
     return null
   }
+  // Las copias anteriores a las asignaturas no traen la lista: se leen como vacías.
+  const subjects = candidate.subjects === undefined ? [] : candidate.subjects
+  if (!Array.isArray(subjects) || !subjects.every(isSubject)) return null
   if (!candidate.tasks.every(isTask) || !candidate.events.every(isEvent) || !candidate.tags.every(isTag)) return null
-  for (const records of [candidate.tasks, candidate.events, candidate.tags]) {
+  for (const records of [candidate.tasks, candidate.events, candidate.tags, subjects]) {
     if (new Set(records.map((record) => record.id)).size !== records.length) return null
   }
 
@@ -130,6 +134,7 @@ export const parsePersistedState = (raw: unknown): AppState | null => {
     tasks: (candidate.tasks as Task[]).map(normalizeTaskRecord),
     events: (candidate.events as Event[]).map(normalizeEventRecord),
     tags: candidate.tags,
+    subjects,
   }
 }
 
@@ -161,6 +166,7 @@ export const repairPersistedState = (raw: unknown): AppState | null => {
   const pick = <T extends string>(value: unknown, options: readonly T[], fallback: T): T =>
     options.includes(value as T) ? (value as T) : fallback
   const tagIds = (value: unknown) => (Array.isArray(value) ? value.filter(nonEmptyString) : [])
+  const optionalId = (value: unknown) => (nonEmptyString(value) ? value : undefined)
 
   const tasks = withId(list(raw.tasks)).map((task) => normalizeTaskRecord({
     id: task.id,
@@ -173,6 +179,7 @@ export const repairPersistedState = (raw: unknown): AppState | null => {
     weeklyPlanOrder: typeof task.weeklyPlanOrder === "number" && Number.isFinite(task.weeklyPlanOrder) ? task.weeklyPlanOrder : undefined,
     steps: withId(list(task.steps)).map((step) => ({ id: step.id, text: optionalText(step.text) ?? "", completed: step.completed === true })),
     tags: tagIds(task.tags),
+    subjectId: optionalId(task.subjectId),
     focusSeconds: optionalCount(task.focusSeconds) ? (task.focusSeconds as number | undefined) : undefined,
     focusSessions: optionalCount(task.focusSessions) ? (task.focusSessions as number | undefined) : undefined,
     createdAt: optionalValidDate(task.createdAt) ?? now,
@@ -194,6 +201,7 @@ export const repairPersistedState = (raw: unknown): AppState | null => {
       isGraded: event.isGraded === true,
       grade: optionalText(event.grade),
       tags: tagIds(event.tags),
+      subjectId: optionalId(event.subjectId),
       parentEventId: nonEmptyString(event.parentEventId) ? event.parentEventId : undefined,
       color: optionalText(event.color),
       recurrence: recurrence && {
@@ -211,7 +219,16 @@ export const repairPersistedState = (raw: unknown): AppState | null => {
     color: text(tag.color, "#6b7280"),
   }))
 
-  return { tasks, events, tags }
+  const subjects = withId(list(raw.subjects)).map((subject) => ({
+    id: subject.id,
+    name: text(subject.name, "Asignatura"),
+    color: text(subject.color, "#6b7280"),
+    archived: subject.archived === true ? true : undefined,
+    manual: subject.manual === "upToDate" ? ("upToDate" as const) : subject.manual === "pending" ? ("pending" as const) : undefined,
+    aliases: cleanAliases(subject.aliases, text(subject.name, "Asignatura")),
+  }))
+
+  return { tasks, events, tags, subjects }
 }
 
 export const validateTask = (task: Partial<Task>): boolean => {
@@ -226,6 +243,28 @@ export const validateTag = (tag: Partial<TaskTag>): boolean => {
   return nonEmptyString(tag.name) && nonEmptyString(tag.color)
 }
 
+const foldName = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()
+
+/** Apodos sin espacios sobrantes, sin repetir (ni entre sí ni con el nombre, aunque cambien tildes o mayúsculas); sin ninguno, `undefined`. */
+export function cleanAliases(value: unknown, name: string): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const seen = new Set([foldName(name)])
+  const aliases: string[] = []
+  for (const item of value) {
+    if (typeof item !== "string") continue
+    const alias = item.trim().replace(/\s+/g, " ")
+    const key = foldName(alias)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    aliases.push(alias)
+  }
+  return aliases.length ? aliases : undefined
+}
+
+export const validateSubject = (subject: Partial<Subject>): boolean => {
+  return nonEmptyString(subject.name) && nonEmptyString(subject.color)
+}
+
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
 const nonEmptyString = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0
 const validDate = (value: unknown): value is string => typeof value === "string" && isValid(parseISO(value))
@@ -238,13 +277,20 @@ function isTag(value: unknown): value is TaskTag {
   return record(value) && nonEmptyString(value.id) && nonEmptyString(value.name) && nonEmptyString(value.color)
 }
 
+function isSubject(value: unknown): value is Subject {
+  return record(value) && nonEmptyString(value.id) && nonEmptyString(value.name) && nonEmptyString(value.color) &&
+    (value.archived === undefined || typeof value.archived === "boolean") &&
+    (value.manual === undefined || value.manual === "upToDate" || value.manual === "pending") &&
+    (value.aliases === undefined || strings(value.aliases))
+}
+
 function isTask(value: unknown): value is Task {
   return record(value) && nonEmptyString(value.id) && nonEmptyString(value.title) &&
     typeof value.description === "string" && ["todo", "inProgress", "done"].includes(value.status as string) &&
     ["low", "medium", "high"].includes(value.priority as string) && strings(value.tags) &&
     optionalDate(value.dueDate) && optionalDate(value.weeklyPlanDate) &&
     (value.weeklyPlanOrder === undefined || (typeof value.weeklyPlanOrder === "number" && Number.isFinite(value.weeklyPlanOrder))) &&
-    optionalCount(value.focusSeconds) && optionalCount(value.focusSessions) &&
+    optionalString(value.subjectId) && optionalCount(value.focusSeconds) && optionalCount(value.focusSessions) &&
     validDate(value.createdAt) && validDate(value.updatedAt) && Array.isArray(value.steps) &&
     value.steps.every((step) => record(step) && nonEmptyString(step.id) && typeof step.text === "string" && typeof step.completed === "boolean")
 }
@@ -254,7 +300,7 @@ function isEvent(value: unknown): value is Event {
     typeof value.description !== "string" || !validDate(value.date) || !strings(value.tags) ||
     !optionalDate(value.endDate) || typeof value.isGraded !== "boolean") return false
   if (["isAllDay", "isMultiDay"].some((key) => value[key] !== undefined && typeof value[key] !== "boolean")) return false
-  if (["startTime", "endTime", "grade", "parentEventId", "color"].some((key) => !optionalString(value[key]))) return false
+  if (["startTime", "endTime", "grade", "parentEventId", "color", "subjectId"].some((key) => !optionalString(value[key]))) return false
   if (value.isMultiDay && (!validDate(value.endDate) || parseISO(value.endDate) < parseISO(value.date))) return false
   if (value.recurrence !== undefined) {
     const r = value.recurrence

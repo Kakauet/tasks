@@ -14,13 +14,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuth } from "@/context/auth-context"
+import { SubjectScopeProvider, useSubjectScope } from "@/context/subject-scope"
 import { TaskProvider, useTaskContext } from "@/context/task-context"
+import { SubjectHeaderPicker } from "@/components/subjects/subject-scope-bar"
+import { SubjectSidebar } from "@/components/subjects/subject-sidebar"
+import { Switch } from "@/components/ui/switch"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
 Calendar,
 Cloud,
 CloudOff,
 Database,
+GraduationCap,
 HelpCircle,
 Keyboard,
 LayoutDashboard,
@@ -80,14 +85,16 @@ export function Dashboard() {
 
   return (
     <TaskProvider>
-      <FocusTimerProvider>
-        <DragDropProvider>
-          <DashboardContent activeView={activeView} setActiveView={setActiveView} onOpenHelp={() => setShowWelcomeDialog(true)} />
-          {showWelcomeDialog && (
-            <WelcomeDialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog} />
-          )}
-        </DragDropProvider>
-      </FocusTimerProvider>
+      <SubjectScopeProvider>
+        <FocusTimerProvider>
+          <DragDropProvider>
+            <DashboardContent activeView={activeView} setActiveView={setActiveView} onOpenHelp={() => setShowWelcomeDialog(true)} />
+            {showWelcomeDialog && (
+              <WelcomeDialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog} />
+            )}
+          </DragDropProvider>
+        </FocusTimerProvider>
+      </SubjectScopeProvider>
     </TaskProvider>
   )
 }
@@ -128,6 +135,7 @@ function DashboardContent({
     isLoading: isAuthLoading,
   } = useAuth()
   const { setTheme, theme } = useTheme()
+  const { enabled: subjectsEnabled, setEnabled: setSubjectsEnabled } = useSubjectScope()
   const activeTaskCount = tasks.filter((t) => t.status !== "done").length
   const eventCount = events.length
   const selectedAccentPreset = ACCENT_PRESETS.find((preset) => preset.id === selectedAccentId) ?? DEFAULT_ACCENT_PRESET
@@ -620,6 +628,22 @@ function DashboardContent({
                 />
               </button>
 
+              <div className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground">
+                <GraduationCap className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <div className="flex-1 text-left">
+                  <div id="subjects-toggle-label">Asignaturas</div>
+                  <div className="text-xs text-muted-foreground">Barra lateral y estado al día</div>
+                </div>
+                <Switch
+                  checked={subjectsEnabled}
+                  aria-labelledby="subjects-toggle-label"
+                  onCheckedChange={(checked) => {
+                    track("preference.change", { setting: "subjects", value: checked })
+                    setSubjectsEnabled(checked)
+                  }}
+                />
+              </div>
+
               {!isMobile && (
                 <button
                   className="flex w-full items-center px-4 py-3 text-sm text-foreground hover:bg-accent/50 transition-colors duration-200"
@@ -679,7 +703,7 @@ function DashboardContent({
                 aria-selected={activeView === "board"}
                 aria-controls="board-panel"
               >
-                <LayoutDashboard className="h-4 w-4 shrink-0 sm:mr-2" />
+                <LayoutDashboard className={cn("h-4 w-4 shrink-0 sm:mr-2", subjectsEnabled && "max-[400px]:hidden")} />
                 <span className="whitespace-nowrap">Tablero</span>
               </button>
 
@@ -698,13 +722,12 @@ function DashboardContent({
                 aria-selected={activeView === "calendar"}
                 aria-controls="calendar-panel"
               >
-                <Calendar className="h-4 w-4 shrink-0 sm:mr-2" />
+                <Calendar className={cn("h-4 w-4 shrink-0 sm:mr-2", subjectsEnabled && "max-[400px]:hidden")} />
                 <span className="whitespace-nowrap">Calendario</span>
               </button>
 
             </nav>
-
-
+            <SubjectHeaderPicker />
             </div>
 
             <div className="flex shrink-0 items-center gap-1 sm:ml-2 sm:gap-2">
@@ -758,14 +781,18 @@ function DashboardContent({
         </div>
       </header>
 
-      <main id="main-content" tabIndex={-1} className="workspace-container min-h-0 flex-1 overflow-y-auto py-3 outline-none sm:py-5">
-        <div id="board-panel" className="h-full min-h-0" role="tabpanel" aria-labelledby="board-tab" hidden={activeView !== "board"}>
-          {activeView === "board" && (isLoading ? <BoardSkeleton /> : <TaskBoard />)}
-        </div>
-        <div id="calendar-panel" role="tabpanel" aria-labelledby="calendar-tab" hidden={activeView !== "calendar"}>
-          {activeView === "calendar" && (isLoading ? <BoardSkeleton /> : <CalendarView />)}
-        </div>
-      </main>
+      {/* La misma estructura con y sin asignaturas: activar la función solo abre sitio a la barra lateral. */}
+      <div className="workspace-container flex min-h-0 flex-1">
+        <SubjectSidebar show={subjectsEnabled && !isLoading} ready={!isLoading} />
+        <main id="main-content" tabIndex={-1} className="-mr-3 min-h-0 min-w-0 flex-1 overflow-y-auto py-3 pr-3 outline-none sm:-mr-6 sm:py-5 sm:pr-6">
+          <div id="board-panel" className="h-full min-h-0" role="tabpanel" aria-labelledby="board-tab" hidden={activeView !== "board"}>
+            {activeView === "board" && (isLoading ? <BoardSkeleton /> : <TaskBoard />)}
+          </div>
+          <div id="calendar-panel" role="tabpanel" aria-labelledby="calendar-tab" hidden={activeView !== "calendar"}>
+            {activeView === "calendar" && (isLoading ? <BoardSkeleton /> : <CalendarView />)}
+          </div>
+        </main>
+      </div>
 
       <ImportExport mode={dataMode} onModeChange={setDataMode} hideButtons />
       <DataSettings open={showDataSettings} onOpenChange={setShowDataSettings} onExport={() => setDataMode("export")} onImport={() => setDataMode("import")} />
