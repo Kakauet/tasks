@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog"
 import { useTaskContext, type Task } from "@/context/task-context"
+import { useSubjectScope } from "@/context/subject-scope"
 import type { TaskSort } from "@/lib/tasks/view"
+import { keepOpen } from "@/lib/ui/recently-done"
 import { cn } from "@/lib/utils"
 import { CheckCircle2, Circle, Clock, PlusCircle } from "lucide-react"
-import { memo, useCallback, useEffect, useState, type CSSProperties } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { motion, useReducedMotion } from "framer-motion"
 import { useDrop } from "react-dnd"
 import { toast } from "sonner"
@@ -32,12 +34,15 @@ interface TaskColumnProps {
   listKey?: string
 }
 
+// A shared empty selection keeps the memoised card list stable between renders.
+const NO_SELECTION: string[] = []
+
 export const TaskColumn = memo(function TaskColumn({
   title,
   tasks,
   status,
   emptyMessage,
-  selectedTasks = [],
+  selectedTasks = NO_SELECTION,
   onTaskSelect,
   showBulkSelect = false,
   manualOrdering = true,
@@ -52,7 +57,12 @@ export const TaskColumn = memo(function TaskColumn({
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
   const [isDeletingTask, setIsDeletingTask] = useState(false)
-  const { tasks: allTasks, moveTask, deleteTask, undo } = useTaskContext()
+  const { tasks: allTasks, moveTask, deleteTask, undo, tags, updateTask } = useTaskContext()
+  const { subjectOf, scope } = useSubjectScope()
+  // Read through a ref so the move handler stays stable: otherwise every change to any
+  // task gives every card a new prop and the memoised cards all render again.
+  const allTasksRef = useRef(allTasks)
+  allTasksRef.current = allTasks
 
   const getStatusColorVariable = () => {
     switch (status) {
@@ -87,7 +97,9 @@ export const TaskColumn = memo(function TaskColumn({
     (taskId: string, targetStatus: Task["status"], targetTaskId?: string, placeAfter = false, placeAtTop = false) => {
       if (showBulkSelect) return
 
+      const allTasks = allTasksRef.current
       const movingTask = allTasks.find((task) => task.id === taskId)
+      if (targetStatus === "done" && movingTask && movingTask.status !== "done") keepOpen(taskId)
       if (!manualOrdering) {
         // A sorted view has no meaningful insertion index. Keep its sort and allow status changes.
         if (movingTask?.status !== targetStatus) { moveTask(taskId, targetStatus); onMoveStatus?.(targetStatus) }
@@ -107,7 +119,7 @@ export const TaskColumn = memo(function TaskColumn({
       moveTask(taskId, targetStatus, targetIndex)
       onMoveStatus?.(targetStatus)
     },
-    [allTasks, manualOrdering, moveTask, onMoveStatus, showBulkSelect],
+    [manualOrdering, moveTask, onMoveStatus, showBulkSelect],
   )
 
   const [{ isOverColumn, isOverBackground, canDropColumn, draggedId }, dropColumn] = useDrop<
@@ -144,6 +156,36 @@ export const TaskColumn = memo(function TaskColumn({
     const timeout = window.setTimeout(() => setSettlingTaskId(null), 280)
     return () => window.clearTimeout(timeout)
   }, [draggedId])
+
+  // Opening the editor or the delete confirmation must not re-render the list: each
+  // motion item measures its layout when it renders, right as the dialog animates in.
+  const cardList = useMemo(() => (
+    // Al filtrar no hay nada que «mover»: sin la clave, cada tarjeta volaría desde su posición anterior.
+    // pb-2 leaves room for the hover toolbar that straddles the last card's bottom edge.
+    <div key={listKey} className="space-y-2 pb-2 sm:space-y-3">
+      {tasks.map((task) => (
+        <motion.div key={task.id} className="relative" role="listitem"
+          layout={task.id !== (draggedId ?? settlingTaskId) ? "position" : false}
+          initial={false} transition={{ layout: reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 1080, damping: 57, mass: 0.6 } }}>
+          <TaskCard
+            task={task}
+            isSelected={selectedTasks.includes(task.id)}
+            onSelect={onTaskSelect}
+            showBulkSelect={showBulkSelect}
+            onEditTask={setEditingTask}
+            onRequestDeleteTask={setTaskToDelete}
+            onMoveTask={handleMoveTask}
+            isDragDisabled={showBulkSelect}
+            manualOrdering={manualOrdering}
+            tags={tags}
+            updateTask={updateTask}
+            subjectOf={subjectOf}
+            scope={scope}
+          />
+        </motion.div>
+      ))}
+    </div>
+  ), [listKey, tasks, draggedId, settlingTaskId, reducedMotion, selectedTasks, onTaskSelect, showBulkSelect, handleMoveTask, manualOrdering, tags, updateTask, subjectOf, scope])
 
   const EmptyState = () => (
     <div className="flex h-full min-h-52 flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-card/35 px-4 py-10 text-center transition-colors hover:border-muted-foreground/40">
@@ -227,28 +269,7 @@ export const TaskColumn = memo(function TaskColumn({
       >
         {tasks.length === 0 ? (
           <EmptyState />
-        ) : (
-          // Al filtrar no hay nada que «mover»: sin la clave, cada tarjeta volaría desde su posición anterior.
-          <div key={listKey} className="space-y-2 pb-1 sm:space-y-3">
-            {tasks.map((task) => (
-              <motion.div key={task.id} className="relative" role="listitem"
-                layout={task.id !== (draggedId ?? settlingTaskId) ? "position" : false}
-                initial={false} transition={{ layout: reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 1080, damping: 57, mass: 0.6 } }}>
-                <TaskCard
-                  task={task}
-                  isSelected={selectedTasks.includes(task.id)}
-                  onSelect={onTaskSelect}
-                  showBulkSelect={showBulkSelect}
-                  onEditTask={setEditingTask}
-                  onRequestDeleteTask={setTaskToDelete}
-                  onMoveTask={handleMoveTask}
-                  isDragDisabled={showBulkSelect}
-                  manualOrdering={manualOrdering}
-                />
-              </motion.div>
-            ))}
-          </div>
-        )}
+        ) : cardList}
         {tasks.length > 0 && <motion.div aria-hidden="true" initial={false}
           animate={{ height: isOverBackground && canDropColumn ? 64 : 0, opacity: isOverBackground && canDropColumn ? 1 : 0 }}
           transition={{ duration: reducedMotion ? 0 : 0.107 }} className="overflow-hidden">

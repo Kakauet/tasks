@@ -1,7 +1,7 @@
 "use client"
 
 import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { ColorPicker } from "@/components/color-picker"
 import { AliasInput } from "@/components/subjects/alias-input"
@@ -45,7 +45,7 @@ export function SubjectsDialog({ open, onOpenChange, editId, threshold, onThresh
     }
   }, [open])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open) setEditing(editId ? subjects.find((subject) => subject.id === editId) ?? null : null)
     // Solo al abrir: las ediciones posteriores no deben sobrescribir lo que se está escribiendo.
     // eslint-disable-next-line react-hooks/exhaustive-deps

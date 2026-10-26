@@ -28,6 +28,8 @@ export interface FocusTimerState {
   remainingMs: number
   /** Focus sessions completed since the timer was started. */
   completedSessions: number
+  /** Focus ms of the current phase already credited to a task chosen earlier. */
+  creditedMs: number
 }
 
 export interface FocusAdvance {
@@ -53,7 +55,12 @@ export function remainingMs(state: FocusTimerState, now: number) {
 
 export function createFocusState(taskId: string | null, preset: FocusPresetId, now: number, running = true): FocusTimerState {
   const duration = FOCUS_PRESETS[preset].focus
-  return { taskId, phase: "focus", preset, endsAt: running ? now + duration : null, remainingMs: duration, completedSessions: 0 }
+  return { taskId, phase: "focus", preset, endsAt: running ? now + duration : null, remainingMs: duration, completedSessions: 0, creditedMs: 0 }
+}
+
+/** A focus phase that is paused at its full length has not started yet. */
+export function hasStarted(state: FocusTimerState) {
+  return state.endsAt !== null || state.remainingMs < phaseDuration(state)
 }
 
 export function pauseFocus(state: FocusTimerState, now: number): FocusTimerState {
@@ -64,10 +71,22 @@ export function resumeFocus(state: FocusTimerState, now: number): FocusTimerStat
   return state.endsAt !== null ? state : { ...state, endsAt: now + state.remainingMs }
 }
 
-/** Whole seconds of focus already spent in the current phase. */
+/** Whole seconds of focus spent in the current phase that no task has received yet. */
 export function elapsedFocusSeconds(state: FocusTimerState, now: number) {
   if (state.phase !== "focus") return 0
-  return Math.max(0, Math.floor((phaseDuration(state) - remainingMs(state, now)) / 1000))
+  return Math.max(0, Math.floor((phaseDuration(state) - remainingMs(state, now) - state.creditedMs) / 1000))
+}
+
+/**
+ * Hand the timer to another task mid-session. The time so far stays with the
+ * previous task; without one, or after a quick correction, it moves on.
+ */
+export function switchTask(state: FocusTimerState, taskId: string | null, now: number): FocusAdvance {
+  const unchanged = { state, creditedSeconds: 0, finishedFocus: 0, finishedBreak: false }
+  if (taskId === state.taskId) return unchanged
+  const spent = elapsedFocusSeconds(state, now)
+  if (!state.taskId || spent < MIN_CREDITED_SECONDS) return { ...unchanged, state: { ...state, taskId } }
+  return { ...unchanged, state: { ...state, taskId, creditedMs: state.creditedMs + spent * 1000 }, creditedSeconds: spent }
 }
 
 /** Switch durations without losing the time already spent in the current phase. */
@@ -81,11 +100,11 @@ export function changePreset(state: FocusTimerState, preset: FocusPresetId, now:
 /** Focus → break (running) → focus (paused, waiting for the student). */
 function nextPhase(state: FocusTimerState, phaseEnd: number): FocusTimerState {
   if (state.phase === "focus") {
-    const next: FocusTimerState = { ...state, phase: "break", completedSessions: state.completedSessions + 1, endsAt: null, remainingMs: 0 }
+    const next: FocusTimerState = { ...state, phase: "break", completedSessions: state.completedSessions + 1, endsAt: null, remainingMs: 0, creditedMs: 0 }
     const duration = phaseDuration(next)
     return { ...next, remainingMs: duration, endsAt: phaseEnd + duration }
   }
-  return { ...state, phase: "focus", endsAt: null, remainingMs: FOCUS_PRESETS[state.preset].focus }
+  return { ...state, phase: "focus", endsAt: null, remainingMs: FOCUS_PRESETS[state.preset].focus, creditedMs: 0 }
 }
 
 /** Apply every phase that ended by `now`, including while the page was closed. */
@@ -96,7 +115,7 @@ export function advanceFocus(state: FocusTimerState, now: number): FocusAdvance 
   let finishedBreak = false
   while (current.endsAt !== null && current.endsAt <= now) {
     if (current.phase === "focus") {
-      creditedSeconds += Math.round(phaseDuration(current) / 1000)
+      creditedSeconds += Math.max(0, Math.round((phaseDuration(current) - current.creditedMs) / 1000))
       finishedFocus++
     } else {
       finishedBreak = true
@@ -126,7 +145,11 @@ export function parseFocusState(serialized: string | null): FocusTimerState | nu
     if (raw.endsAt !== null && (typeof raw.endsAt !== "number" || !Number.isFinite(raw.endsAt))) return null
     if (typeof raw.remainingMs !== "number" || !Number.isFinite(raw.remainingMs) || raw.remainingMs < 0) return null
     if (typeof raw.completedSessions !== "number" || !Number.isInteger(raw.completedSessions) || raw.completedSessions < 0) return null
-    return raw as FocusTimerState
+    // Timers saved by earlier versions have no creditedMs.
+    const creditedMs = raw.creditedMs ?? 0
+    if (typeof creditedMs !== "number" || !Number.isFinite(creditedMs) || creditedMs < 0) return null
+    const { taskId, phase, preset, endsAt, remainingMs, completedSessions } = raw as FocusTimerState
+    return { taskId, phase, preset, endsAt, remainingMs, completedSessions, creditedMs }
   } catch {
     return null
   }

@@ -32,7 +32,7 @@ import { findSubjectInTitle, looksLikeExam } from "@/lib/tasks/subjects"
 import { addDays, format, isBefore, parseISO, startOfDay } from "date-fns"
 import { es } from "date-fns/locale"
 import { CalendarDays, CalendarIcon, Clock, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 const DEFAULT_EVENT_COLOR = "#3b82f6"
@@ -144,8 +144,9 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
     return `create:${defaultValues?.date ?? "no-date"}`
   }, [mode, defaultValues?.id, defaultValues?.date])
 
-  // Inicializar el formulario solo cuando se abre el diálogo o cambia realmente el evento a editar
-  useEffect(() => {
+  // Inicializar el formulario solo cuando se abre el diálogo o cambia realmente el evento a editar.
+  // Antes de pintar: si no, se vería un fotograma con el formulario vacío.
+  useLayoutEffect(() => {
     if (!open) {
       lastInitKeyRef.current = null
       return

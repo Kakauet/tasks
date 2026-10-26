@@ -515,6 +515,101 @@
     opacity: 1;
   }
 
+  /* Touch screens: no action row. The move button sits in the title row
+     (tapping the card edits, and deleting lives in the editor). */
+  @media (hover: none), (pointer: coarse) {
+    .task-card .task-card-toolbar { display: none; }
+    .task-card .task-card-quick-move { display: flex; margin: -2px 0 -2px 4px; }
+    .task-card[data-bulk-select] .task-card-quick-move { display: none; }
+  }
+
+  /* Folded completed cards read as a list: tighter than the gap between full cards. */
+  .task-column-scroll [role="listitem"]:has(> .task-card[data-compact]) + [role="listitem"]:has(> .task-card[data-compact]) {
+    margin-top: 6px;
+  }
+
+  /* With a mouse the action row leaves the flow and becomes a small toolbar
+     centred on the card's bottom-right edge: the card saves a whole row and
+     only shows its actions on hover or keyboard focus, over its padding and
+     the gap below rather than over its content. Touch screens keep the row. */
+  @media (hover: hover) and (pointer: fine) {
+    .task-card:hover,
+    .task-card:focus-within {
+      z-index: 10;
+    }
+
+    .task-card .task-card-toolbar {
+      position: absolute;
+      z-index: 20;
+      right: 10px;
+      bottom: -17px;
+      margin: 0;
+      flex-wrap: nowrap;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid hsl(var(--border));
+      border-radius: 8px;
+      background: hsl(var(--popover));
+      box-shadow: 0 6px 16px rgb(15 23 42 / 0.1), 0 1px 2px rgb(15 23 42 / 0.06);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(-3px) scale(0.98);
+      transform-origin: right top;
+      transition: opacity 100ms ease, transform 100ms ease, visibility 0s linear 100ms;
+    }
+
+    .dark .task-card .task-card-toolbar {
+      box-shadow: 0 8px 20px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.3);
+    }
+
+    /* A short delay on hover keeps toolbars from flashing while the pointer
+       sweeps across a column; keyboard focus shows it at once. */
+    .task-card:hover .task-card-toolbar,
+    .task-card:focus-visible .task-card-toolbar,
+    .task-card:has(:focus-visible) .task-card-toolbar {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: none;
+      transition: opacity 150ms ease 70ms, transform 150ms cubic-bezier(0.32, 0.72, 0, 1) 70ms, visibility 0s linear 70ms;
+    }
+
+    .task-card:focus-visible .task-card-toolbar,
+    .task-card:has(:focus-visible) .task-card-toolbar {
+      transition-delay: 0s;
+    }
+
+    .task-card .task-card-toolbar .task-card-actions { gap: 2px; opacity: 1; }
+
+    .task-card .task-card-toolbar button {
+      height: 28px;
+      border-radius: 6px;
+    }
+
+    .task-card .task-card-toolbar .task-card-actions button { width: 28px; }
+
+    .task-card .task-card-toolbar > button { padding: 0 8px 0 10px; }
+
+    .task-card .task-card-toolbar-divider {
+      display: block;
+      width: 1px;
+      height: 16px;
+      margin: 0 2px;
+      background: hsl(var(--border));
+    }
+
+    .task-drag-active .task-card .task-card-toolbar,
+    .task-card[data-bulk-select] .task-card-toolbar {
+      display: none;
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
+    .task-card .task-card-toolbar,
+    .task-card:hover .task-card-toolbar { transform: none; }
+  }
+
   .task-card [role="progressbar"] {
     background: hsl(var(--muted));
   }
@@ -576,7 +671,8 @@
     transition: background-color 140ms ease, box-shadow 140ms ease;
   }
 
-  /* Floating Pomodoro: bottom-right on desktop, centred above the safe area on phones. */
+  /* Floating Pomodoro: bottom-right on desktop; on phones the open panel spans the
+     content gutters (centred with mx-auto once it reaches its max width). */
   .focus-timer-dock {
     right: max(1rem, env(safe-area-inset-right));
     bottom: max(1rem, env(safe-area-inset-bottom));
@@ -584,8 +680,12 @@
 
   @media (max-width: 767px) {
     .focus-timer-dock {
-      right: 0.75rem;
+      right: max(0.75rem, env(safe-area-inset-right));
       bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+
+    .focus-timer-panel {
+      left: max(0.75rem, env(safe-area-inset-left));
     }
   }
 
@@ -664,13 +764,39 @@
     @apply bg-transparent;
   }
 
+  /* Scrollbars stay out of sight until the pointer is over the area that
+     scrolls: with a mouse they still hint at more content and can be dragged. */
   ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
     border-radius: 9999px;
+    background-clip: content-box;
+    background-color: transparent;
+  }
+
+  :hover::-webkit-scrollbar-thumb {
     background-color: hsl(var(--scrollbar-thumb));
   }
 
   ::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--scrollbar-thumb-hover));
+  }
+
+  /* Browsers with the standard properties ignore the rules above. */
+  @supports (scrollbar-color: auto) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+    }
+
+    *:hover {
+      scrollbar-color: hsl(var(--scrollbar-thumb)) transparent;
+    }
+  }
+
+  /* On touch screens the finger scrolls: no bar taking width at all. */
+  @media (hover: none), (pointer: coarse) {
+    * { scrollbar-width: none; }
+    ::-webkit-scrollbar { display: none; width: 0; height: 0; }
   }
 
   input,

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import dynamic from "next/dynamic"
 
 import { DragDropProvider } from "@/components/dnd-provider"
-import { FocusTimerProvider } from "@/components/focus-timer"
+import { FocusTimerProvider, useFocusTimer } from "@/components/focus-timer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -284,7 +284,8 @@ function DashboardContent({
     setAuthBusy(false)
   }
 
-  useDashboardShortcuts(activeView, setActiveView, () => setShowKeyboardShortcuts(true))
+  const { openTimer } = useFocusTimer()
+  useDashboardShortcuts(activeView, setActiveView, () => setShowKeyboardShortcuts(true), () => openTimer())
 
   const renderSettingsMenu = () => {
     return (
@@ -296,7 +297,7 @@ function DashboardContent({
               aria-hidden="true"
               className={cn(
                 "absolute right-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-background",
-                syncHealthy ? "bg-emerald-500" : cloudStatus === "available" && !syncProblem ? "bg-primary" : "bg-amber-500",
+                syncHealthy ? "bg-[hsl(var(--status-success))]" : cloudStatus === "available" && !syncProblem ? "bg-primary" : "bg-[hsl(var(--status-warning))]",
               )}
             />
           </Button>
@@ -319,7 +320,7 @@ function DashboardContent({
             <div className="px-4 py-3 border-b border-border/50">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  {syncHealthy ? <Cloud className="h-4 w-4 text-emerald-500" /> : cloudStatus === "available" && !syncProblem ? <Cloud className="h-4 w-4 text-primary" /> : <CloudOff className="h-4 w-4 text-amber-500" />}
+                  {syncHealthy ? <Cloud className="h-4 w-4 text-[hsl(var(--status-success))]" /> : cloudStatus === "available" && !syncProblem ? <Cloud className="h-4 w-4 text-primary" /> : <CloudOff className="h-4 w-4 text-[hsl(var(--status-warning))]" />}
                   <h3 className="text-sm font-medium text-foreground">Sincronización</h3>
                 </div>
                 <Badge variant={syncHealthy ? "default" : "outline"} className="text-[10px]">
@@ -669,7 +670,7 @@ function DashboardContent({
 
   return (
     <div className="app-viewport flex h-dvh min-h-0 flex-col overflow-hidden">
-      <header className="sticky top-0 z-40 w-full shrink-0 border-b border-border/70 bg-background/95 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 w-full shrink-0 border-b border-border/70 bg-background">
         <div className="workspace-container">
           <div className="relative flex items-center justify-between gap-2 py-2 sm:py-3">
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
@@ -741,7 +742,7 @@ function DashboardContent({
                           size="icon"
                           onClick={undo}
                           disabled={!canUndo}
-                          className="rounded-lg hover:bg-accent/50 transition-all duration-200 disabled:opacity-50"
+                          className="rounded-lg transition-colors duration-150 hover:bg-accent/50 disabled:opacity-50"
                           aria-label="Deshacer última acción"
                         >
                           <Undo className="h-4 w-4" />
@@ -761,7 +762,7 @@ function DashboardContent({
                           size="icon"
                           onClick={redo}
                           disabled={!canRedo}
-                          className="rounded-lg hover:bg-accent/50 transition-all duration-200 disabled:opacity-50"
+                          className="rounded-lg transition-colors duration-150 hover:bg-accent/50 disabled:opacity-50"
                           aria-label="Rehacer última acción"
                         >
                           <Redo className="h-4 w-4" />

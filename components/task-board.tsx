@@ -31,6 +31,7 @@ import { getSortedTaskGroups, updateColumnSorts, type TaskSort } from "@/lib/tas
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ViewToolbar } from "@/components/ui/view-toolbar"
 
 // Icons
 import { Filter, PlusCircle, Search, X, MoreHorizontal, Tags, CheckSquare, ArrowUpRight, Timer } from "lucide-react"
@@ -191,40 +192,44 @@ export const TaskBoard = () => {
     )
   }, [showFilters, tags, selectedTags, selectedPriorities, toggleTagFilter, togglePriorityFilter])
 
+  const toolbar = (
+    <ViewToolbar className="flex items-center gap-1.5 sm:gap-2">
+      <div className="relative min-w-0 flex-1 md:max-w-xs">
+        <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input type="search" aria-label="Buscar tareas" placeholder="Buscar…" value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)} className="h-8 border-transparent bg-muted/45 pl-9 pr-9 text-[14px] shadow-none hover:border-border focus-visible:bg-background sm:h-9 sm:pl-10 sm:pr-10" />
+        {searchTerm && <Button variant="ghost" size="icon" aria-label="Borrar búsqueda" onClick={() => setSearchTerm("")}
+          className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2"><X className="h-4 w-4" /></Button>}
+      </div>
+      <div className="ml-auto flex flex-none items-center gap-1.5 sm:gap-2">
+        <div className="flex md:hidden">
+          <TaskBoardSort value={boardSort} onChange={handleBoardSort} />
+        </div>
+        <Button variant={showFilters ? "secondary" : "ghost"} size="sm" onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters} aria-controls="task-filters" aria-label="Filtros" className="relative h-8 w-8 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3">
+          <Filter className="h-3.5 w-3.5" />
+          {activeFilterCount > 0 && <Badge variant="secondary" className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] tabular-nums">{activeFilterCount}</Badge>}
+        </Button>
+        <Popover open={toolsOpen} onOpenChange={setToolsOpen}>
+          <PopoverTrigger asChild><Button variant="ghost" size="sm" aria-label="Herramientas" className="h-8 w-8 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3"><MoreHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Herramientas</span></Button></PopoverTrigger>
+          <PopoverContent align="end" className="w-64 space-y-2 rounded-2xl p-2">
+            <Button variant="ghost" onClick={() => { setToolsOpen(false); openTimer() }} className="w-full justify-start"><Timer className="h-4 w-4" /> Pomodoro</Button>
+            <Button variant="ghost" onClick={tagsDialog.open} className="w-full justify-start"><Tags className="h-4 w-4" /> Gestionar etiquetas</Button>
+            <Button variant="ghost" aria-pressed={showBulkOps} onClick={() => { setShowBulkOps(!showBulkOps); setSelectedTasks([]) }} className="w-full justify-start"><CheckSquare className="h-4 w-4" /> {showBulkOps ? "Salir de selección" : "Seleccionar tareas"}</Button>
+            <div className="border-t pt-2"><ImportExport /></div>
+          </PopoverContent>
+        </Popover>
+        <Button variant="primary" size="sm" data-action="create-task" onClick={taskDialog.open} className="h-8 w-auto flex-none whitespace-nowrap px-3 sm:h-9">
+          <PlusCircle className="h-3.5 w-3.5" /> <span className="md:hidden">Nueva</span><span className="hidden md:inline">Nueva tarea</span>
+        </Button>
+      </div>
+    </ViewToolbar>
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 sm:gap-3">
       <h1 className="sr-only">Tareas</h1>
       <SubjectScopeBar />
-      <div className="flex shrink-0 flex-row items-center gap-1.5 rounded-2xl border border-border/70 bg-card/70 p-2 shadow-sm sm:gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input type="search" aria-label="Buscar tareas" placeholder="Buscar…" value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)} className="h-8 border-transparent bg-muted/45 pl-9 pr-9 text-[14px] shadow-none hover:border-border focus-visible:bg-background sm:h-9 sm:pl-10 sm:pr-10" />
-          {searchTerm && <Button variant="ghost" size="icon" aria-label="Borrar búsqueda" onClick={() => setSearchTerm("")}
-            className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2"><X className="h-4 w-4" /></Button>}
-        </div>
-        <div className="flex flex-none items-center gap-1.5 sm:gap-2">
-          <div className="flex md:hidden">
-            <TaskBoardSort value={boardSort} onChange={handleBoardSort} />
-          </div>
-          <Button variant={showFilters ? "secondary" : "ghost"} size="sm" onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters} aria-controls="task-filters" aria-label="Filtros" className="relative h-8 w-8 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3">
-            <Filter className="h-3.5 w-3.5" />
-            {activeFilterCount > 0 && <Badge variant="secondary" className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] tabular-nums">{activeFilterCount}</Badge>}
-          </Button>
-          <Popover open={toolsOpen} onOpenChange={setToolsOpen}>
-            <PopoverTrigger asChild><Button variant="ghost" size="sm" aria-label="Herramientas" className="h-8 w-8 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3"><MoreHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Herramientas</span></Button></PopoverTrigger>
-            <PopoverContent align="end" className="w-64 space-y-2 rounded-2xl p-2">
-              <Button variant="ghost" onClick={() => { setToolsOpen(false); openTimer() }} className="w-full justify-start"><Timer className="h-4 w-4" /> Pomodoro</Button>
-              <Button variant="ghost" onClick={tagsDialog.open} className="w-full justify-start"><Tags className="h-4 w-4" /> Gestionar etiquetas</Button>
-              <Button variant="ghost" aria-pressed={showBulkOps} onClick={() => { setShowBulkOps(!showBulkOps); setSelectedTasks([]) }} className="w-full justify-start"><CheckSquare className="h-4 w-4" /> {showBulkOps ? "Salir de selección" : "Seleccionar tareas"}</Button>
-              <div className="border-t pt-2"><ImportExport /></div>
-            </PopoverContent>
-          </Popover>
-          <Button variant="primary" size="sm" data-action="create-task" onClick={taskDialog.open} className="h-8 w-auto flex-none whitespace-nowrap px-3 sm:h-9">
-            <PlusCircle className="h-3.5 w-3.5" /> <span className="md:hidden">Nueva</span><span className="hidden md:inline">Nueva tarea</span>
-          </Button>
-        </div>
-      </div>
+      {toolbar}
       {hasActiveFilters && <div role="status" className="flex shrink-0 items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>{filteredTasks.length} de {tasks.length} tareas</span>
         <Button variant="ghost" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" /> Limpiar filtros</Button>

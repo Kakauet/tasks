@@ -80,6 +80,9 @@ Los identificadores de tareas y etiquetas se sustituyen por una clave de 8 carac
 | `task.drag_end` | Clave de tarea, estado de origen/destino, si se completó una entrega válida y duración del arrastre. |
 | `event.drag_start` | Clave del evento, desplazamiento en días del segmento agarrado respecto al inicio e indicador de varios días. |
 | `event.drag_end` | Clave del evento, si se soltó sobre un día válido, desplazamiento en días y duración del arrastre. |
+| `focus.open` | Duración elegida del pomodoro y clave de la tarea, o `none` si se abre sin tarea. |
+| `focus.complete` | Clave de la tarea (o `none`), segundos sumados y pomodoros completados desde que se abrió. |
+| `focus.stop` | Segundos de concentración guardados al cerrar el pomodoro. |
 | `preference.change` | Ajuste de apariencia, preset/tema elegido y columna si corresponde. |
 | `backup.inspect` | Tamaño del archivo, si es antiguo y cantidades de tareas/eventos/etiquetas. |
 | `backup.export` | Tamaño final, uso de compresión e inclusión de apariencia/actividad. |

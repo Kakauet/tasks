@@ -29,7 +29,7 @@ import { addDays, format, isSameDay, nextMonday, parseISO, startOfDay } from "da
 import { es } from "date-fns/locale"
 import { AlertCircle, CalendarIcon, Circle, Clock, Timer, Trash2, X } from "lucide-react"
 import { formatStudyTime } from "@/lib/focus"
-import { useEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 // Implementar drag and drop para los pasos
@@ -85,7 +85,9 @@ export function TaskDialog({
   const detectsSubject = mode === "create" && subjectsEnabled && !subjectTouched
   const autoSubject = detectsSubject && !!subjectId && findSubjectInTitle(title, subjects)?.id === subjectId
 
-  useEffect(() => {
+  // Fill the form before the first paint: an effect would show the empty form for a
+  // frame and the dialog would change size in the middle of its opening animation.
+  useLayoutEffect(() => {
     if (open) {
       saveStartedRef.current = false
       setTitleError(null)

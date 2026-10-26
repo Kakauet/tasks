@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils"
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect
 
 /** Curva y duración comunes de la barra: arranca rápido y frena suave, sin rebote. */
-const EASE = "ease-[cubic-bezier(0.32,0.72,0,1)]"
+// `ease-[…]` is ambiguous with tailwindcss-animate and Tailwind silently emits nothing for it.
+const EASE = "[transition-timing-function:cubic-bezier(0.32,0.72,0,1)]"
 const DURATION_MS = 320
 const WIDTH = { expanded: 240, collapsed: 56 } as const
 

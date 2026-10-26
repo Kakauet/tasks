@@ -10,12 +10,13 @@ import { LinkifiedText } from "@/components/ui/linkified-text"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Progress } from "@/components/ui/progress"
 import { SubjectChip } from "@/components/subjects/subject-chip"
-import { useSubjectScope } from "@/context/subject-scope"
+import type { SubjectScopeValue } from "@/context/subject-scope"
 import { TagBadge } from "@/components/ui/tag-badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { type Task, useTaskContext } from "@/context/task-context"
+import type { Task, TaskContextType } from "@/context/task-context"
 import { cn } from "@/lib/utils"
 import { dropSide } from "@/lib/ui/dnd"
+import { isKeptOpen, releaseOpen } from "@/lib/ui/recently-done"
 import { differenceInCalendarDays, format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import { ArrowRight, Check, ChevronDown, Edit3, RotateCcw, Timer, Trash2 } from "lucide-react"
@@ -49,6 +50,12 @@ interface TaskCardProps {
   onMoveTask?: (taskId: string, targetStatus: Task["status"], targetTaskId?: string, placeAfter?: boolean, placeAtTop?: boolean) => void
   isDragDisabled?: boolean
   manualOrdering?: boolean
+  // Passed in rather than read from context: the contexts change with every edit to any
+  // task, and reading them here would re-render every card each time.
+  tags: TaskContextType["tags"]
+  updateTask: TaskContextType["updateTask"]
+  subjectOf: SubjectScopeValue["subjectOf"]
+  scope: SubjectScopeValue["scope"]
 }
 
 const PRIORITY_MAP = {
@@ -67,13 +74,23 @@ export const TaskCard = memo(function TaskCard({
   onMoveTask,
   isDragDisabled = false,
   manualOrdering = true,
+  tags,
+  updateTask,
+  subjectOf,
+  scope,
 }: TaskCardProps) {
-  const { tags, updateTask } = useTaskContext()
-  const { subjectOf, scope } = useSubjectScope()
   const showSubject = (scope === "all" || scope === "none") && !!subjectOf(task)
+  // A folded card has one line to spare, so it drops the chip when the title already names the subject.
+  const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+  const titleNamesSubject = showSubject && fold(task.title).includes(fold(subjectOf(task)!.name))
   const [dropPlacement, setDropPlacement] = useState<"before" | "after" | null>(null)
   const [stepsExpanded, setStepsExpanded] = useState(true)
   const [priorityOpen, setPriorityOpen] = useState(false)
+  // Completed cards fold into one line. "kept" marks a task the user has just
+  // completed: it stays open until it has been seen and then left the screen.
+  const isDone = task.status === "done"
+  const [doneOpen, setDoneOpen] = useState<false | "kept" | "user">(() => isKeptOpen(task.id) && "kept")
+  const isCompact = isDone && !doneOpen
   const suppressClickUntil = useRef(0)
   const isInteractive = (target: EventTarget | null) => target instanceof Element &&
     !!target.closest('button, a, input, textarea, select, [role="checkbox"], [role="combobox"], [contenteditable="true"], [data-no-drag]')
@@ -253,10 +270,41 @@ export const TaskCard = memo(function TaskCard({
     if (isTouchMode && !isDragDisabled) dragCard(node)
   }, [dragCard, isTouchMode, isDragDisabled])
 
+  useEffect(() => {
+    const node = cardRef.current
+    if (!isDone || doneOpen !== "kept" || !node) return
+    let seen = false
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) seen = true
+      else if (seen) { releaseOpen(task.id); setDoneOpen(false) }
+    })
+    observer.observe(node)
+    return () => { observer.disconnect(); if (seen) releaseOpen(task.id) }
+  }, [isDone, doneOpen, task.id])
+
+  const toggleDoneOpen = () => {
+    releaseOpen(task.id)
+    setDoneOpen(isCompact ? "user" : false)
+  }
+
   const toggleSelection = (nextState?: boolean) => {
     if (!onSelect) return
     onSelect(task.id, typeof nextState === "boolean" ? nextState : !isSelected)
   }
+
+  // Completed cards trade the priority dots for this control: priority no longer matters.
+  const foldButton = (
+    <button
+      type="button"
+      aria-expanded={!isCompact}
+      aria-label={`${isCompact ? "Desplegar" : "Plegar"} ${task.title}`}
+      title={isCompact ? "Desplegar" : "Plegar"}
+      onClick={toggleDoneOpen}
+      className="flex h-8 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <ChevronDown className={cn("h-4 w-4 transition-transform duration-150", !isCompact && "rotate-180")} aria-hidden="true" />
+    </button>
+  )
 
   return (
     <TooltipProvider>
@@ -300,6 +348,10 @@ export const TaskCard = memo(function TaskCard({
             toggleSelection()
             return
           }
+          if (isCompact) {
+            toggleDoneOpen()
+            return
+          }
           onEditTask?.(task)
         }}
         onKeyDown={(e) => {
@@ -308,6 +360,8 @@ export const TaskCard = memo(function TaskCard({
             e.preventDefault()
             if (showBulkSelect && onSelect) {
               toggleSelection()
+            } else if (isCompact) {
+              toggleDoneOpen()
             } else {
               onEditTask?.(task)
             }
@@ -320,7 +374,11 @@ export const TaskCard = memo(function TaskCard({
         tabIndex={0}
         role="group"
         aria-roledescription="tarjeta de tarea"
-        aria-label={`Tarea: ${task.title}. Prioridad ${PRIORITY_MAP[task.priority].text}. ${dueDateInfo ? `Vence ${dueDateInfo.text}` : "Sin fecha límite"}.${showBulkSelect ? " Enter o espacio para seleccionar." : " Enter para editar."} Delete para eliminar.`}
+        data-bulk-select={showBulkSelect || undefined}
+        data-compact={isCompact || undefined}
+        aria-label={isCompact
+          ? `Tarea completada: ${task.title}.${showBulkSelect ? " Enter o espacio para seleccionar." : " Enter para desplegar."} Delete para eliminar.`
+          : `Tarea: ${task.title}. Prioridad ${PRIORITY_MAP[task.priority].text}. ${dueDateInfo ? `Vence ${dueDateInfo.text}` : "Sin fecha límite"}.${showBulkSelect ? " Enter o espacio para seleccionar." : " Enter para editar."} Delete para eliminar.`}
       >
         {showBulkSelect && (
           <div
@@ -337,7 +395,28 @@ export const TaskCard = memo(function TaskCard({
           </div>
         )}
 
-        <CardContent data-task-card-content className={cn("px-3 py-2 sm:px-4 sm:py-2.5", showBulkSelect && "pl-10 sm:pl-10")}>
+        {isCompact ? (
+          <CardContent data-task-card-content className={cn("px-3 py-1 sm:px-4", showBulkSelect && "pl-10 sm:pl-10")}>
+            <div data-task-card-summary className="flex items-center gap-2">
+              <div ref={setTouchDragNode}
+                className={cn("flex min-w-0 flex-1 items-center gap-2 py-1.5", isTouchMode && !showBulkSelect && "task-drag-surface")}
+                onContextMenu={(event) => { if (isTouchMode) event.preventDefault() }}
+              >
+                {/* Title and subject shrink together so a narrow column still shows both. */}
+                <h3 title={task.title} className="min-w-0 flex-auto truncate text-card-title text-muted-foreground">{task.title}</h3>
+                {showSubject && !titleNamesSubject && <SubjectChip item={task} className="max-w-[45%] shrink" />}
+                {totalSteps > 0 && (
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground" aria-label={`${completedSteps} de ${totalSteps} pasos`}>
+                    {completedSteps}/{totalSteps}
+                  </span>
+                )}
+              </div>
+              <div data-task-card-priority className="-mr-1.5 flex shrink-0 items-center">{foldButton}</div>
+            </div>
+          </CardContent>
+        ) : (
+        <CardContent data-task-card-content className={cn("px-3 py-2 sm:px-4 sm:py-2.5", showBulkSelect && "pl-10 sm:pl-10",
+          doneOpen === "user" && "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150")}>
           <div data-task-card-summary className="flex items-start gap-2">
             <div ref={setTouchDragNode}
               className={cn("flex min-w-0 flex-1 items-center gap-2", isTouchMode && !showBulkSelect && "task-drag-surface")}
@@ -403,7 +482,7 @@ export const TaskCard = memo(function TaskCard({
             </div>
             </div>
             <div data-task-card-priority className="-mr-1.5 flex shrink-0 items-center gap-1 pt-0.5">
-              <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
+              {isDone ? foldButton : <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
@@ -433,7 +512,23 @@ export const TaskCard = memo(function TaskCard({
                     </button>
                   ))}
                 </PopoverContent>
-              </Popover>
+              </Popover>}
+              {/* Touch screens have no hover toolbar: moving to the next column sits by the thumb
+                  instead, and editing and deleting live in the editor a tap away. */}
+              <button
+                type="button"
+                disabled={isDragDisabled || !onMoveTask}
+                aria-label={`${nextActionLabel}: mover ${task.title} a ${nextStatusLabel}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onMoveTask?.(task.id, nextStatus, undefined, false, true)
+                }}
+                className="task-card-quick-move hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary transition-colors duration-150 active:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45"
+              >
+                {task.status === "todo" ? <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  : task.status === "inProgress" ? <Check className="h-4 w-4" aria-hidden="true" />
+                    : <RotateCcw className="h-4 w-4" aria-hidden="true" />}
+              </button>
             </div>
           </div>
 
@@ -481,7 +576,9 @@ export const TaskCard = memo(function TaskCard({
               )}
             </div>
           )}
-          <div data-task-card-detail className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 sm:mt-3.5 sm:pt-2.5">
+          {/* On touch screens this is a row under the content; with a mouse it is a
+              toolbar that floats beside the priority dots on hover (see globals.css). */}
+          <div data-task-card-detail className="task-card-toolbar mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 sm:mt-3.5 sm:pt-2.5">
             <div className="task-card-actions flex items-center gap-0.5 sm:gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -498,7 +595,7 @@ export const TaskCard = memo(function TaskCard({
                     <span className="sr-only">Editar tarea</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="left" align="center">
+                <TooltipContent side="top" align="center">
                   <p>Editar tarea</p>
                 </TooltipContent>
               </Tooltip>
@@ -518,12 +615,13 @@ export const TaskCard = memo(function TaskCard({
                     <span className="sr-only">Eliminar tarea</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="left" align="center">
+                <TooltipContent side="top" align="center">
                   <p>Eliminar tarea</p>
                 </TooltipContent>
               </Tooltip>
 
             </div>
+            <span aria-hidden="true" className="task-card-toolbar-divider hidden" />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -542,12 +640,13 @@ export const TaskCard = memo(function TaskCard({
                   {task.status === "done" ? <RotateCcw className="h-4 w-4" aria-hidden="true" /> : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="left" align="center">
+              <TooltipContent side="top" align="center">
                 <p>Mover a {nextStatusLabel}</p>
               </TooltipContent>
             </Tooltip>
           </div>
         </CardContent>
+        )}
       </Card>
     </TooltipProvider>
   )

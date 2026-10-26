@@ -206,3 +206,23 @@ test('the fourth pomodoro is followed by a long break and short skips are not cr
   assert.equal(focus.formatStudyTime(3900), '1 h 5 min');
   assert.equal(focus.formatStudyTime(1500), '25 min');
 });
+test('switching task mid-pomodoro splits the time and old saved timers still load', () => {
+  const idle = focus.createFocusState(null, '25-5', 0, false);
+  assert.equal(focus.hasStarted(idle), false);
+  assert.ok(focus.hasStarted(focus.resumeFocus(idle, 0)));
+  // Time spent without a task goes to the first task chosen.
+  let state = focus.resumeFocus(idle, 0);
+  const first = focus.switchTask(state, 'a', 5 * 60_000);
+  assert.equal(first.creditedSeconds, 0);
+  assert.equal(first.state.taskId, 'a');
+  const second = focus.switchTask(first.state, 'b', 10 * 60_000);
+  assert.equal(second.creditedSeconds, 600, 'a keeps the 10 minutes so far');
+  assert.equal(focus.elapsedFocusSeconds(second.state, 10 * 60_000), 0);
+  assert.equal(focus.switchTask(second.state, 'c', 10 * 60_000 + 30_000).creditedSeconds, 0, 'a quick correction credits nothing');
+  const finished = focus.advanceFocus(second.state, 25 * 60_000);
+  assert.equal(finished.creditedSeconds, 900, 'b only gets the rest of the pomodoro');
+  assert.equal(finished.state.creditedMs, 0);
+  const legacy = { taskId: 'a', phase: 'focus', preset: '25-5', endsAt: null, remainingMs: 60_000, completedSessions: 2 };
+  assert.equal(focus.parseFocusState(JSON.stringify(legacy)).creditedMs, 0);
+  assert.equal(focus.parseFocusState(JSON.stringify({ ...legacy, creditedMs: -1 })), null);
+});

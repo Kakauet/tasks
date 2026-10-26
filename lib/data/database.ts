@@ -12,6 +12,8 @@ export function openLocalDatabase(): Promise<IDBDatabase> {
     request.onblocked = () => reject(new Error("Cierra las otras pestañas de la aplicación e inténtalo de nuevo."))
     request.onsuccess = () => {
       request.result.onversionchange = () => { request.result.close(); connection = undefined }
+      // The browser can also close it on its own (site data cleared, storage failure): reopen on next use.
+      request.result.onclose = () => { connection = undefined }
       resolve(request.result)
     }
   }).catch(error => { connection = undefined; throw error })

@@ -8,7 +8,7 @@ type View = "board" | "calendar"
  * Single-key shortcuts, active only when the user is not typing or inside a dialog.
  * Browser-reserved combinations (Ctrl+N, Ctrl+H, Alt+Tab…) cannot be intercepted reliably.
  */
-export function useDashboardShortcuts(activeView: View, setActiveView: (view: View) => void, showHelp: () => void) {
+export function useDashboardShortcuts(activeView: View, setActiveView: (view: View) => void, showHelp: () => void, openTimer: () => void) {
   const [pendingAction, setPendingAction] = useState<string | null>(null)
 
   useEffect(() => {
@@ -44,6 +44,7 @@ export function useDashboardShortcuts(activeView: View, setActiveView: (view: Vi
       else if (key === "2") run(() => setActiveView("calendar"))
       else if (key === "v") run(() => setActiveView(activeView === "board" ? "calendar" : "board"))
       else if (key === "t" && activeView === "calendar") run(() => window.dispatchEvent(new Event("goToToday")))
+      else if (key === "p") run(openTimer)
       else if (key === "/") {
         const input = document.querySelector<HTMLInputElement>('input[type="search"]')
         if (input) run(() => input.focus())
@@ -51,5 +52,5 @@ export function useDashboardShortcuts(activeView: View, setActiveView: (view: Vi
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [activeView, setActiveView, showHelp])
+  }, [activeView, setActiveView, showHelp, openTimer])
 }

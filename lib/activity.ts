@@ -67,6 +67,16 @@ export function validateActivity(raw: unknown): ActivityArchive {
   return archive
 }
 
+const dayOf = (time: number) => new Date(time).toISOString().slice(0,10)
+
+function tally(summary: DailyActivity, events: ActivityEvent[]) {
+  for (const event of events) {
+    summary.counts[event[3]] = (summary.counts[event[3]] ?? 0) + 1
+    if (event[3] === "session.pulse") summary.activeMs += Number(event[4].activeMs) || 0
+  }
+  return summary
+}
+
 async function persist(events: ActivityEvent[]) {
   const packed = packActivity(events)
   const blob = await compressJson(packed)
@@ -77,15 +87,10 @@ async function persist(events: ActivityEvent[]) {
   const existing = await idbRequest(tx.objectStore("activity").get(id))
   if (!existing) {
     tx.objectStore("activity").put({ id, time: events.at(-1)![0], bytes: blob.size, count: events.length, blob } satisfies StoredBatch)
-    const days = Array.from(new Set(events.map(event => new Date(event[0]).toISOString().slice(0,10))))
-    for (const day of days) {
+    for (const day of new Set(events.map(event => dayOf(event[0])))) {
       const store = tx.objectStore("daily")
       const summary: DailyActivity = await idbRequest(store.get(day)) ?? { id: day, counts: {}, activeMs: 0 }
-      for (const event of events.filter(row => new Date(row[0]).toISOString().startsWith(day))) {
-        summary.counts[event[3]] = (summary.counts[event[3]] ?? 0) + 1
-        if (event[3] === "session.pulse") summary.activeMs += Number(event[4].activeMs) || 0
-      }
-      store.put(summary)
+      store.put(tally(summary, events.filter(event => dayOf(event[0]) === day)))
     }
   }
   await done
@@ -134,11 +139,18 @@ export async function exportActivity(): Promise<ActivityArchive> {
   // A finite snapshot; interactions arriving during export remain queued for the next batch.
   const pendingBatches = Math.ceil(queue.length / 64)
   for (let i=0;i<Math.max(1,pendingBatches);i++) await flushActivity()
-  if(lastError) throw new Error("No se ha podido guardar toda la actividad. Reintenta o exporta la copia sin incluir el historial.")
+  // A batch the browser refused to write (full disk, file locked by an antivirus…) stays queued
+  // for a retry; the copy takes it from memory instead of failing. Read inside the chain so no
+  // flush is halfway through it.
+  let unsaved: ActivityEvent[] = []
+  await (chain = chain.then(() => { if (lastError) unsaved = queue.slice() }))
   const batches = await readAll<StoredBatch>("activity")
   const decoded:PackedActivity[]=[]
   for(const batch of batches.sort((a,b)=>a.time-b.time)) decoded.push(await readJsonBlob(batch.blob) as PackedActivity)
-  return { version: 1, batches: decoded, daily: await readAll<DailyActivity>("daily") }
+  for(let i=0;i<unsaved.length;i+=64) decoded.push(packActivity(unsaved.slice(i,i+64)))
+  const daily = new Map((await readAll<DailyActivity>("daily")).map(day => [day.id, day]))
+  for (const day of new Set(unsaved.map(event => dayOf(event[0])))) daily.set(day, tally(daily.get(day) ?? { id: day, counts: {}, activeMs: 0 }, unsaved.filter(event => dayOf(event[0]) === day)))
+  return { version: 1, batches: decoded, daily: Array.from(daily.values()) }
 }
 
 export async function clearActivity() {
@@ -175,6 +187,9 @@ export async function restoreActivity(raw: ActivityArchive) {
     batches.forEach(batch => tx.objectStore("activity").put(batch))
     archive.daily.forEach(day => tx.objectStore("daily").put(day))
     await done
+    // The unsaved batch behind the last error was replaced along with the rest of the history.
+    lastError = null
+    droppedEvents = 0
   } finally { queue = []; accepting = true }
 }
 

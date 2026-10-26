@@ -104,7 +104,7 @@ export function ImportExport({ mode, onModeChange, hideButtons = false }: { mode
     try {
       const snapshot=latest.current
       const next=planImport(snapshot,preview.payload.data,importMode,policy)
-      const previousLog=restoreLog?await exportActivity():undefined
+      const previousLog=restoreLog?await exportActivity().catch(()=>{throw new Error("No se ha podido leer tu historial de actividad para guardarlo en la copia de recuperación. Inténtalo de nuevo o desmarca «Reemplazar el historial de actividad».")}):undefined
       try {await saveRecovery(await createBackup(snapshot,readPreferences(),previousLog))}
       catch {throw new Error("No se pudo guardar la copia de recuperación. La importación se ha detenido y tus datos siguen intactos. Libera espacio o habilita el almacenamiento local.")}
       if(snapshot!==latest.current)throw new Error("Tus datos han cambiado mientras se preparaba la copia. Revisa la vista previa y vuelve a importar.")

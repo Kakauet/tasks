@@ -119,8 +119,19 @@ export async function loadLocalState(): Promise<LoadedLocalState> {
 }
 
 let writeChain = Promise.resolve()
+// Saves queued while another one is compressing collapse into the newest: ticking five
+// steps in a row compresses and writes the board once or twice instead of five times.
+let queued: { state: AppState; syncBase?: SyncBase | null; result: Promise<void> } | null = null
 export function saveLocalState(state: AppState, syncBase?: SyncBase | null): Promise<void> {
+  if (queued) {
+    queued.state = state
+    queued.syncBase = syncBase
+    return queued.result
+  }
+  const entry = { state, syncBase } as { state: AppState; syncBase?: SyncBase | null; result: Promise<void> }
   const write = async () => {
+    if (queued === entry) queued = null
+    const { state, syncBase } = entry
     try {
       const blob = await compressJson(state)
       const sync = syncBase ? { userId: syncBase.userId, version: syncBase.version, blob: await compressSyncBase(syncBase) } : undefined
@@ -140,6 +151,8 @@ export function saveLocalState(state: AppState, syncBase?: SyncBase | null): Pro
     }
   }
   const result = writeChain.then(write)
+  entry.result = result
+  queued = entry
   writeChain = result.catch(() => {})
   return result
 }

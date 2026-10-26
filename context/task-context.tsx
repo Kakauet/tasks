@@ -20,7 +20,7 @@ export type {
 } from "@/lib/tasks/types"
 
 // Interfaz del contexto
-interface TaskContextType {
+export interface TaskContextType {
   isLoading: boolean
   syncState: SyncState
   syncNow: () => void

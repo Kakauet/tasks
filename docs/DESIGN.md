@@ -85,7 +85,15 @@ La unidad base es 4 px. Espacios habituales: 8, 12, 16, 20, 24 y 32 px.
 - Metadatos en chips rectangulares suaves; etiquetas de usuario siguen siendo badges.
 - El estado vencido cambia el borde **interior** de la tarjeta. No usar `ring` exterior dentro de un contenedor con overflow porque puede quedar recortado.
 - El progreso solo aparece si existen pasos.
-- Las acciones se agrupan tras un separador y no compiten con el contenido.
+- Las acciones no compiten con el contenido. En táctil no hay fila de acciones: tocar la tarjeta edita, eliminar vive en el editor y mover a la siguiente columna es un botón de icono junto a los puntos de prioridad, al alcance del pulgar. Con ratón la fila sale del flujo y se convierte en una barra flotante (`bg-popover`, 8 px de radio, padding de 2 px y botones de 6 px) centrada sobre el borde inferior derecho. Aparece al pasar el ratón (70 ms de espera para que no parpadee al barrer una columna, 150 ms de fundido) o al instante con el foco de teclado, y se oculta al arrastrar o en selección múltiple. Queda sobre el padding y el hueco entre tarjetas, nunca sobre el contenido.
+- Las completadas se pliegan en una línea, separadas 6 px para leerse como lista: título atenuado sin tachar (la columna ya dice que están hechas), asignatura (solo si el título no la nombra ya) y pasos «9/9». Un clic o Intro la despliega; el chevron, donde irían los puntos de prioridad, la vuelve a plegar.
+- Una tarea recién completada no se pliega: sigue abierta, con «Reabrir» a mano, hasta que se ha visto y sale de la pantalla. Así un clic por error nunca hace saltar la tarjeta.
+
+### Barra de herramientas de cada vista
+
+- La cabecera es igual en todas las vistas (pestañas, asignatura, deshacer/rehacer y ajustes); lo propio de cada vista va debajo, en `ViewToolbar` (`components/ui/view-toolbar.tsx`).
+- Tablero y calendario comparten contenedor (panel de 16 px con padding de 8 px, controles de 8 px), altura (36 px desde `sm`) y orden: a la izquierda lo que te sitúa (búsqueda de máximo 20 rem desde `md`; «Hoy» y flechas), hueco libre, y a la derecha cómo ves la vista (filtros y Herramientas; Mes/Semana) con la acción principal al final («Nueva tarea» / «Nuevo evento»).
+- Al cambiar de vista solo cambia el contenido de la fila, nunca su forma ni su posición.
 
 ### Columnas
 
@@ -110,6 +118,8 @@ La unidad base es 4 px. Espacios habituales: 8, 12, 16, 20, 24 y 32 px.
 - Los formularios largos comparten el mismo espaciado interior: 20 px en móvil y 24 px desde `sm`; solo el cuerpo se desplaza.
 - El pie permanece estable y agrupa cancelar/guardar a la derecha; eliminar queda separado a la izquierda.
 - Los diálogos no usan glassmorphism ni fondos transparentes.
+- Animación: fundido con un zoom del 2 %, 150 ms al abrir y 100 ms al cerrar. El fondo oscurece sin desenfoque (animar un `backdrop-filter` a pantalla completa da tirones).
+- El formulario se rellena antes del primer pintado (`useLayoutEffect`), para que el diálogo no cambie de tamaño a mitad de la animación.
 
 ### Asignaturas
 
@@ -124,6 +134,15 @@ La unidad base es 4 px. Espacios habituales: 8, 12, 16, 20, 24 y 32 px.
 - La edición de una asignatura cabe en dos filas: nombre y color; apodos y acciones. Los apodos son discretos: sin etiqueta visible (su explicación va en el `title`) y no se repiten en la lista.
 - Los apodos se editan como fichas dentro de un campo con el mismo aspecto que un `Input` (Intro o coma añaden, Retroceso en vacío quita la última). Cualquier asignación automática por título se avisa con un toast con «Deshacer».
 
+### Pomodoro
+
+- Panel flotante abajo a la derecha (en móvil ocupa el ancho entre márgenes): 20 px de radio, padding de 12 px y controles interiores de 8 px. Minimizado es una píldora de 16 px con padding de 4 px y botón de 12 px. Usa `bg-popover` y `--shadow-floating`, sin desenfoque.
+- Una sola jerarquía: cabecera (título, duración, minimizar, cerrar), anillo con el reloj, selector de tarea y acciones. La acción principal es la única rellena; saltar es un botón de icono con borde.
+- El anillo usa `--primary` durante la concentración y `--status-success` en el descanso; en pausa el reloj se atenúa y aparece «En pausa». Los cuatro puntos bajo la fase indican el ciclo hasta el descanso largo.
+- La duración (25/50 min) es un control segmentado que solo se muestra mientras el reloj está parado; nunca permite pasar a una duración más corta que el tiempo ya dedicado.
+- El selector de tarea agrupa por estado (en progreso, por hacer) con el icono de cada columna. Cambiar de tarea a mitad deja el tiempo ya dedicado en la anterior.
+- Se abre desde Herramientas o con el atajo P; las tarjetas no llevan un botón propio para no recargar su fila de acciones.
+
 ## 6. Estados e interacción
 
 - Hover: 150 ms; puede cambiar fondo, borde o elevar 1 px.
@@ -131,6 +150,7 @@ La unidad base es 4 px. Espacios habituales: 8, 12, 16, 20, 24 y 32 px.
 - Drag: opacidad reducida; el destino usa el acento.
 - Disabled: opacidad 45–50 %, sin interacción.
 - Respetar `prefers-reduced-motion`.
+- Barras de desplazamiento: con ratón son finas e invisibles hasta pasar el puntero por la zona que se desplaza; en táctil no se muestran.
 
 ## 7. Accesibilidad
 

@@ -5,6 +5,7 @@ import { useTaskContext, type Task, type Event as TaskEvent } from "@/context/ta
 import { useSubjectScope } from "@/context/subject-scope"
 import { SubjectScopeBar } from "@/components/subjects/subject-scope-bar"
 import { cn } from "@/lib/utils"
+import { ViewToolbar } from "@/components/ui/view-toolbar"
 import { differenceInCalendarDays, format, isSameDay, isSameMonth, isToday, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -616,78 +617,36 @@ export function CalendarView() {
       <SubjectScopeBar />
       <CalendarEventDragLayer />
       <TooltipProvider>
-        {/* Barra de herramientas */}
-        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 md:flex md:justify-between">
-          <span className="min-w-0 truncate text-sm font-medium md:hidden" aria-live="polite" title={periodLabel}>
+        {/* Barra de herramientas: misma fila que la del tablero. En móvil el periodo y «Nuevo» van arriba. */}
+        <ViewToolbar className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 md:flex md:gap-2">
+          <span className="min-w-0 truncate pl-1 text-sm font-medium md:hidden" aria-live="polite" title={periodLabel}>
             {periodLabel}
           </span>
-          <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1.5 sm:gap-2 md:col-span-1 md:row-auto md:shrink-0">
-            <Button variant="outline" size="sm" onClick={goToToday} className="order-3 ml-auto h-8 shrink-0 px-2.5 md:order-none md:ml-0">
-              <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+          {/* Izquierda: dónde estás. */}
+          <div className="col-span-2 row-start-2 flex min-w-0 items-center gap-1.5 sm:gap-2 md:col-span-1 md:row-auto">
+            <Button variant="outline" size="sm" onClick={goToToday} className="h-8 shrink-0 px-2.5 sm:h-9 sm:px-3">
+              <CalendarIcon className="h-3.5 w-3.5" />
               Hoy
             </Button>
-            <Tabs value={view} onValueChange={(v) => setView(v as "month" | "week")} className="shrink-0 md:hidden">
-              <TabsList className="h-8 rounded-[14px] p-0.5">
-                <TabsTrigger value="month" className="px-2.5 text-xs">Mes</TabsTrigger>
-                <TabsTrigger value="week" className="px-2.5 text-xs">Semana</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {view === "month" ? (
-              <div className="flex shrink-0 gap-1 md:hidden">
-                <Button variant="outline" size="icon" aria-label="Mes anterior" onClick={prevMonth} className="h-8 w-8">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" aria-label="Mes siguiente" onClick={nextMonth} className="h-8 w-8">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex shrink-0 gap-1 md:hidden">
-                <Button variant="outline" size="icon" aria-label="Semana anterior" onClick={prevWeek} className="h-8 w-8">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" aria-label="Semana siguiente" onClick={nextWeek} className="h-8 w-8">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            <Tabs value={view} onValueChange={(v) => setView(v as "month" | "week")} className="mr-2 shrink-0 hidden md:block">
-              <TabsList>
-                <TabsTrigger value="month">
-                  Mes
-                </TabsTrigger>
-                <TabsTrigger value="week">
-                  Semana
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            {view === "month" ? (
-              <div className="hidden md:flex gap-1">
-                <Button variant="outline" size="icon" aria-label="Mes anterior" onClick={prevMonth} className="shrink-0">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" aria-label="Mes siguiente" onClick={nextMonth} className="shrink-0">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="hidden md:flex gap-1">
-                <Button variant="outline" size="icon" aria-label="Semana anterior" onClick={prevWeek} className="shrink-0">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" aria-label="Semana siguiente" onClick={nextWeek} className="shrink-0">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
+            <div className="flex shrink-0 gap-1">
+              <Button variant="outline" size="icon" aria-label={view === "month" ? "Mes anterior" : "Semana anterior"} onClick={view === "month" ? prevMonth : prevWeek} className="h-8 w-8 sm:h-9 sm:w-9">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" aria-label={view === "month" ? "Mes siguiente" : "Semana siguiente"} onClick={view === "month" ? nextMonth : nextWeek} className="h-8 w-8 sm:h-9 sm:w-9">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <ViewSwitch view={view} onChange={setView} className="ml-auto md:hidden" />
           </div>
-
-          <Button variant="primary" data-action="create-event" size="sm" onClick={handleCreateEvent} className="col-start-2 row-start-1 h-8 w-auto flex-none justify-self-end whitespace-nowrap px-3 sm:h-9 md:col-auto md:row-auto">
-            <PlusCircle className="h-3.5 w-3.5" />
-            <span className="md:hidden">Nuevo</span><span className="hidden md:inline">Nuevo evento</span>
-          </Button>
-        </div>
+          {/* Derecha: cómo lo ves y la acción principal. */}
+          <div className="col-start-2 row-start-1 flex items-center gap-2 md:col-auto md:row-auto md:ml-auto">
+            <ViewSwitch view={view} onChange={setView} className="hidden md:block" />
+            <Button variant="primary" data-action="create-event" size="sm" onClick={handleCreateEvent} className="h-8 w-auto flex-none whitespace-nowrap px-3 sm:h-9">
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span className="md:hidden">Nuevo</span><span className="hidden md:inline">Nuevo evento</span>
+            </Button>
+          </div>
+        </ViewToolbar>
 
         {/* Contenido principal */}
         <div className="grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-4">
@@ -743,5 +702,16 @@ export function CalendarView() {
         />
       </TooltipProvider>
     </div>
+  )
+}
+
+function ViewSwitch({ view, onChange, className }: { view: "month" | "week"; onChange: (view: "month" | "week") => void; className?: string }) {
+  return (
+    <Tabs value={view} onValueChange={(value) => onChange(value as "month" | "week")} className={cn("shrink-0", className)}>
+      <TabsList className="h-8 rounded-lg p-0.5 sm:h-9">
+        <TabsTrigger value="month" className="rounded-md px-2.5 py-1 text-xs sm:px-3 sm:text-sm">Mes</TabsTrigger>
+        <TabsTrigger value="week" className="rounded-md px-2.5 py-1 text-xs sm:px-3 sm:text-sm">Semana</TabsTrigger>
+      </TabsList>
+    </Tabs>
   )
 }

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 const shortcuts = [
   ["Nueva tarea", "N"], ["Nuevo evento", "E"],
   ["Ir al tablero / calendario", "1 / 2"], ["Cambiar de vista", "V"],
-  ["Ir a hoy (calendario)", "T"], ["Buscar tareas", "/"],
+  ["Ir a hoy (calendario)", "T"], ["Buscar tareas", "/"], ["Pomodoro", "P"],
   ["Deshacer", "Ctrl + Z"], ["Rehacer", "Ctrl + Y"], ["Mostrar atajos", "?"],
 ]
 

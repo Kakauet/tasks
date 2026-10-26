@@ -31,9 +31,9 @@ Vista de mes y de semana. Los eventos pueden durar varios días o repetirse, y s
 
 ### Y además
 
-- Temporizador de foco para dedicarle un rato a una tarea y llevar la cuenta del tiempo.
+- Pomodoro (25/5 o 50/10) que suma el tiempo de concentración a la tarea elegida; se abre desde Herramientas o con `P` y sigue contando aunque recargues la página.
 - Deshacer y rehacer cualquier cambio.
-- Atajos de teclado: `N` nueva tarea, `E` nuevo evento, `/` buscar y `?` para ver el resto.
+- Atajos de teclado: `N` nueva tarea, `E` nuevo evento, `/` buscar, `P` pomodoro y `?` para ver el resto.
 - Modo claro y oscuro, con el color de acento a tu gusto.
 - Se puede añadir a la pantalla de inicio del móvil y usarla como una app más.
 

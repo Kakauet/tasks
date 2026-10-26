@@ -96,6 +96,30 @@ test('local journal persists batches, aggregates active time, omits task text an
   archive=await exportActivity();
   assert.deepEqual(archive,{version:1,batches:[],daily:[]});
 });
+test('a batch the browser refused to write still goes into copies and imports can replace it',async()=>{
+  await clearActivity();
+  const put=IDBObjectStore.prototype.put;
+  const failWrites=()=>{IDBObjectStore.prototype.put=function(...args){if(this.name==='activity')throw new Error('disk');return put.apply(this,args)}};
+  failWrites();
+  try {
+    track('session.pulse',{activeMs:500});
+    const archive=await exportActivity();
+    assert.equal(archive.batches.length,1);
+    assert.equal(archive.daily[0].activeMs,500);
+    assert.ok((await activityStats()).error,'the failure is still reported');
+  } finally {IDBObjectStore.prototype.put=put}
+  let stats=await activityStats();
+  assert.equal(stats.count,1,'saved once storage works again');
+  assert.equal(stats.error,null);
+  failWrites();
+  try {
+    track('ui.click',{x:1});await flushActivity();
+    await restoreActivity({version:1,batches:[],daily:[]});
+    stats=await activityStats();
+    assert.equal(stats.error,null,'the restored history replaces the unsaved batch');
+    assert.equal(stats.count,0);
+  } finally {IDBObjectStore.prototype.put=put}
+});
 test('restored detail and daily summaries retain records older than a year',async()=>{
   const now=Date.now(),day=86400000;
   const recent=packActivity([[now,'recent',1,'ui.click',{}]]);

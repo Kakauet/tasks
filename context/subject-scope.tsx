@@ -11,7 +11,7 @@ const ENABLED_KEY = "taskmaster-subjects-enabled"
 const COLLAPSED_KEY = "taskmaster-subjects-collapsed"
 const THRESHOLD_KEY = "taskmaster-subjects-threshold"
 
-interface SubjectScopeValue {
+export interface SubjectScopeValue {
   /** Las asignaturas son opcionales: apagadas, la aplicación se comporta como antes. */
   enabled: boolean
   setEnabled: (enabled: boolean) => void
