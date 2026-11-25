@@ -11,10 +11,16 @@ export interface History {
 
 export const createHistory = (state: AppState): History => ({ past: [], present: state, future: [] })
 
-/** Preserve the redo branch and identity when all collections are unchanged. */
+/** Preserve the redo branch and identity when the workspace is unchanged. */
 export function recordHistory(history: History, state: AppState): History {
   const current = history.present
-  if (current.tasks === state.tasks && current.events === state.events && current.tags === state.tags && current.subjects === state.subjects) return history
+  if (
+    current.tasks === state.tasks &&
+    current.events === state.events &&
+    current.tags === state.tags &&
+    current.subjects === state.subjects &&
+    current.timetable === state.timetable
+  ) return history
   return { past: [...history.past, current].slice(-HISTORY_LIMIT), present: state, future: [] }
 }
 

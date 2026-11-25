@@ -1,7 +1,7 @@
 "use client"
 
-import { AlertCircle, CalendarClock, ChevronDown, GraduationCap, Hourglass, Inbox, Layers, ListTodo, Pencil, Settings2, type LucideIcon } from "lucide-react"
-import { useState } from "react"
+import { AlertCircle, CalendarClock, CalendarDays, ChevronDown, GraduationCap, Hourglass, Inbox, Layers, ListTodo, Pencil, Settings2, type LucideIcon } from "lucide-react"
+import { useRef, useState } from "react"
 import { StatusIcon } from "@/components/subjects/subject-status"
 import { StatusMenu } from "@/components/subjects/status-menu"
 import { SubjectNav } from "@/components/subjects/subject-sidebar"
@@ -120,9 +120,11 @@ function PopoverSummary({ subject, summary, onEdit }: { subject: Subject; summar
  * Selector de asignatura para pantallas sin barra lateral. Va en la cabecera, junto a las vistas,
  * así que no añade ninguna fila: el detalle de la asignatura se abre al tocarlo.
  */
-export function SubjectHeaderPicker() {
+export function SubjectHeaderPicker({ onOpenTimetable }: { onOpenTimetable?: (trigger: HTMLButtonElement | null) => void }) {
   const { enabled, scope, selectedSubject, summaries, openManager, openGrades } = useSubjectScope()
   const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const openingTimetableRef = useRef(false)
   if (!enabled) return null
 
   const summary = selectedSubject ? summaries.get(selectedSubject.id) : undefined
@@ -136,6 +138,7 @@ export function SubjectHeaderPicker() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           aria-label={`Asignatura: ${selectedSubject?.name ?? (scope === "none" ? "sin asignatura" : "todas")}${summary ? `, ${summary.status === "upToDate" ? "al día" : "pendiente"}` : ""}`}
           className="flex min-w-0 max-w-[8.5rem] flex-initial items-center gap-1.5 self-stretch rounded-xl border border-border/60 bg-muted/70 px-2.5 text-[13px] font-medium text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:max-w-[13rem] lg:hidden"
@@ -152,7 +155,10 @@ export function SubjectHeaderPicker() {
           <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")} />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} collisionPadding={12} className="max-h-[70dvh] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl p-2">
+      <PopoverContent align="end" sideOffset={8} collisionPadding={12} className="max-h-[70dvh] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl p-2" onCloseAutoFocus={(event) => {
+        if (openingTimetableRef.current) event.preventDefault()
+        openingTimetableRef.current = false
+      }}>
         {selectedSubject && summary && <PopoverSummary subject={selectedSubject} summary={summary} onEdit={close(() => openManager(selectedSubject.id))} />}
         <SubjectNav onNavigate={() => setOpen(false)} />
         <div className="mt-1 grid grid-cols-2 gap-1 border-t border-border/70 pt-1">
@@ -162,6 +168,14 @@ export function SubjectHeaderPicker() {
           <Button type="button" variant="ghost" size="sm" className="justify-start px-2.5" onClick={close(() => openManager())}>
             <Settings2 /> Gestionar
           </Button>
+          {onOpenTimetable && (
+            <Button type="button" variant="ghost" size="sm" className="col-span-2 justify-start px-2.5" onClick={close(() => {
+              openingTimetableRef.current = true
+              onOpenTimetable(triggerRef.current)
+            })}>
+              <CalendarDays /> Horario
+            </Button>
+          )}
         </div>
       </PopoverContent>
     </Popover>

@@ -1,3 +1,5 @@
+import type { Timetable } from "./timetable"
+
 export type TaskStatus = "todo" | "inProgress" | "done"
 export type TaskPriority = "low" | "medium" | "high"
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly" | "yearly"
@@ -14,6 +16,14 @@ export interface TaskTag {
   color: string
 }
 
+export interface OtherGrade {
+  id: string
+  title: string
+  grade?: string
+  weight?: number
+  bonus?: boolean
+}
+
 export interface Subject {
   id: string
   name: string
@@ -21,6 +31,8 @@ export interface Subject {
   archived?: boolean // Oculta la asignatura de la barra lateral sin borrar sus tareas
   manual?: "upToDate" | "pending" // Estado fijado a mano; sin valor, se calcula
   aliases?: string[] // Otros nombres con los que aparece en los títulos («Lengua» para Castellano)
+  otherGrades?: OtherGrade[]
+  finalGrade?: number
 }
 
 export interface Task {
@@ -60,6 +72,8 @@ export interface Event {
   isMultiDay?: boolean // Flag para eventos de varios días
   isGraded: boolean
   grade?: string
+  gradeWeight?: number
+  gradeBonus?: boolean
   tags: string[] // IDs of tags
   subjectId?: string // Asignatura a la que pertenece el evento
   recurrence?: EventRecurrence
@@ -73,5 +87,6 @@ export interface AppState {
   events: Event[]
   tags: TaskTag[]
   subjects: Subject[]
+  timetable?: Timetable | null
 }
 

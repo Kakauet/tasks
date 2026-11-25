@@ -1,6 +1,7 @@
 "use client"
 
 import type { Event, Task, TaskTag } from "@/context/task-context"
+import { GRADE_PENDING_LABEL } from "@/lib/tasks/subjects"
 import { cn } from "@/lib/utils"
 import { format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
@@ -14,13 +15,21 @@ import { TagBadge } from "@/components/ui/tag-badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Icons
-import { CalendarDays, Clock, Trash2 } from "lucide-react"
+import { CalendarDays, Clock, FileClock, Trash2 } from "lucide-react"
 import { CalendarEventDragSurface } from "./calendar-event-dnd"
+
+export function PendingGradeIndicator({ className }: { className?: string }) {
+  return (
+    <span aria-hidden="true" title={GRADE_PENDING_LABEL} className={cn("size-3 shrink-0 text-[hsl(var(--status-caution))]", className)}>
+      <FileClock className="size-full" />
+    </span>
+  )
+}
 
 /**
  * Componente para renderizar un evento de un solo día
  */
-export function SingleDayEvent({ event, onOpen }: { event: Event; onOpen: (event: Event) => void }) {
+export function SingleDayEvent({ event, onOpen, gradePending }: { event: Event; onOpen: (event: Event) => void; gradePending: boolean }) {
   const eventColor = event.color
   const resolvedEventColor = eventColor ?? "hsl(var(--event-default))"
   return (
@@ -31,6 +40,7 @@ export function SingleDayEvent({ event, onOpen }: { event: Event; onOpen: (event
             event={event}
             anchorDate={event.date}
             onOpen={onOpen}
+            gradePending={gradePending}
             className="calendar-event flex min-w-0 cursor-grab items-center gap-1 border px-1.5 py-0.5 text-xs active:cursor-grabbing"
             style={{
               backgroundColor: eventColor ? `${eventColor}20` : "hsl(var(--event-default) / 0.14)",
@@ -48,6 +58,7 @@ export function SingleDayEvent({ event, onOpen }: { event: Event; onOpen: (event
               {event.title}
             </span>
             {event.recurrence && <span className="shrink-0 opacity-80">↻</span>}
+            {gradePending && <PendingGradeIndicator />}
           </CalendarEventDragSurface>
         </TooltipTrigger>
         <TooltipContent side="top" align="center" className="glass">
@@ -59,6 +70,7 @@ export function SingleDayEvent({ event, onOpen }: { event: Event; onOpen: (event
               </p>
             )}
             {event.isAllDay && <p>Todo el día</p>}
+            {gradePending && <p className="text-[hsl(var(--status-caution))]">{GRADE_PENDING_LABEL}</p>}
             {event.description && <LinkifiedText text={event.description} as="p" maxLinkLength={38} />}
           </div>
         </TooltipContent>
@@ -75,11 +87,13 @@ export function MultiDayEvent({
   position,
   anchorDate,
   onOpen,
+  gradePending,
 }: {
   event: Event
   position: "start" | "middle" | "end" | null
   anchorDate: string
   onOpen: (event: Event) => void
+  gradePending: boolean
 }) {
   const eventColor = event.color
   const resolvedEventColor = eventColor ?? "hsl(var(--event-default))"
@@ -88,6 +102,7 @@ export function MultiDayEvent({
       event={event}
       anchorDate={anchorDate}
       onOpen={onOpen}
+      gradePending={gradePending}
       className={cn(
         "flex h-6 min-w-0 items-center gap-1 overflow-hidden px-2 py-1 text-xs text-white select-none",
         position === "start" && "multi-day-event-start -mr-2.5 w-[calc(100%+0.625rem)]",
@@ -110,6 +125,7 @@ export function MultiDayEvent({
         <>
           <CalendarDays className="h-3 w-3 shrink-0" />
           <span className="calendar-event-title-fade">{event.title}</span>
+          {gradePending && <PendingGradeIndicator className="text-current" />}
         </>
       )}
     </CalendarEventDragSurface>
@@ -160,13 +176,16 @@ export function EventDetail({
   tags,
   onOpen,
   onDelete,
+  gradePending,
 }: {
   event: Event
   tags: TaskTag[]
   onOpen: (event: Event) => void
   onDelete: (eventId: string) => void
+  gradePending: boolean
 }) {
   const eventTags = event.tags ? tags.filter((tag) => event.tags.includes(tag.id)) : []
+  const grade = event.grade?.trim()
 
   return (
     <div
@@ -225,8 +244,8 @@ export function EventDetail({
         </div>
         <div className="flex items-start">
           {event.isGraded && (
-            <Badge variant="outline" className="ml-2">
-              {event.grade ? `Nota: ${event.grade}` : "Sin calificar"}
+            <Badge variant="outline" className={cn("ml-2", gradePending && "border-[hsl(var(--status-caution)/0.32)] bg-[hsl(var(--status-warning-soft)/0.45)] text-[hsl(var(--status-caution))]")}>
+              {grade ? (event.gradeBonus ? `+${grade} puntos` : `Nota: ${grade}`) : gradePending ? GRADE_PENDING_LABEL : "Sin calificar"}
             </Badge>
           )}
           <Button

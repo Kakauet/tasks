@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, format, parseISO } from "date-fns"
-import type { AppState, Event, Subject, Task } from "./types"
+import type { AppState, Event, OtherGrade, Subject, Task } from "./types"
 
 export type SubjectStatus = "pending" | "upToDate"
 
@@ -57,6 +57,12 @@ export interface SubjectSummary {
 export type SubjectScope = "all" | "none" | (string & {})
 
 export const todayString = (now = new Date()) => format(now, "yyyy-MM-dd")
+export const GRADE_PENDING_LABEL = "Nota pendiente"
+
+export function isGradePending(event: Event, today = todayString()) {
+  const lastDay = event.isMultiDay ? event.endDate ?? event.date : event.date
+  return event.isGraded && !event.grade?.trim() && lastDay < today
+}
 
 /** Una asignatura archivada o borrada deja de actuar como tal: sus elementos se leen como «sin asignatura». */
 export const subjectIdOf = (item: { subjectId?: string }, subjects: Subject[]) =>
@@ -78,19 +84,59 @@ export function parseGrade(grade?: string): number | null {
   return (value / max) * 10
 }
 
-export function averageGrade(events: Event[]): number | undefined {
-  const grades = events.filter((event) => event.isGraded).map((event) => parseGrade(event.grade)).filter((value): value is number => value !== null)
-  if (grades.length === 0) return undefined
-  return grades.reduce((total, value) => total + value, 0) / grades.length
+export function parseBonusPoints(grade?: string): number | null {
+  const value = grade?.trim()
+  if (!value || !/^\d+(?:[.,]\d+)?$/.test(value)) return null
+  const points = Number(value.replace(",", "."))
+  return points <= 10 ? points : null
 }
 
+type GradeValue = Pick<OtherGrade, "grade" | "weight" | "bonus">
+
+function calculateGrades(items: GradeValue[]) {
+  const bonusPoints = items.reduce((total, item) => item.bonus ? total + (parseBonusPoints(item.grade) ?? 0) : total, 0)
+  const grades = items.filter((item) => !item.bonus)
+  const weighted = grades.some(({ weight }) => weight !== undefined)
+  const assigned = grades.reduce((total, { weight }) => total + (weight ?? 0), 0)
+  const values = grades.map(({ grade, weight }) => ({ value: parseGrade(grade), weight }))
+  const unweighted = values.filter(({ value, weight }) => value !== null && weight === undefined).length
+  const remaining = Math.max(0, 100 - assigned)
+  const defaultWeight = !weighted ? 1 : unweighted ? remaining / unweighted : 0
+  let gradedWeight = 0
+  let points = 0
+  let pending = false
+  for (const { value, weight } of values) {
+    if (value === null) {
+      if ((weight ?? (weighted ? remaining : 1)) > 0) pending = true
+      continue
+    }
+    const effectiveWeight = weight ?? defaultWeight
+    gradedWeight += effectiveWeight
+    points += value * effectiveWeight
+  }
+  const excessWeight = assigned > 100 + 1e-10
+  return {
+    average: gradedWeight > 0 ? Math.min(10, points / gradedWeight + bonusPoints) : undefined,
+    provisional: pending || excessWeight || (weighted && unweighted === 0 && remaining > 1e-10),
+    evaluatedWeight: weighted ? gradedWeight : undefined,
+    excessWeight,
+    sharedWeight: weighted && unweighted > 0 ? remaining : undefined,
+    automaticWeight: weighted ? defaultWeight : undefined,
+  }
+}
+
+const eventGrade = (event: Event): GradeValue => ({ grade: event.grade, weight: event.gradeWeight, bonus: event.gradeBonus })
+
+export function averageGrade(events: Event[], otherGrades: OtherGrade[] = []): number | undefined {
+  return calculateGrades([...events.filter((event) => event.isGraded).map(eventGrade), ...otherGrades]).average
+}
 /**
  * Estar al día depende solo de la prioridad: no queda ninguna tarea pendiente
  * que alcance el umbral (por defecto media o alta). Las fechas no intervienen;
  * las vencidas solo se cuentan como dato. Se puede fijar a mano en la asignatura.
  */
 export function summarizeSubject(
-  subject: Pick<Subject, "id" | "manual">,
+  subject: Pick<Subject, "id" | "manual" | "otherGrades">,
   tasks: Task[],
   events: Event[],
   today = todayString(),
@@ -118,7 +164,7 @@ export function summarizeSubject(
     pending: pendingTasks.length,
     overdue: pendingTasks.filter((task) => task.dueDate && task.dueDate < today).length,
     next: upcoming[0],
-    averageGrade: averageGrade(subjectEvents),
+    averageGrade: averageGrade(subjectEvents, subject.otherGrades),
   }
 }
 
@@ -212,38 +258,59 @@ export function describeDetection({ tasks, events }: Pick<TitleDetection, "tasks
 
 export type GradeState = "graded" | "text" | "missing" | "upcoming"
 export interface GradeEntry { event: Event; value: number | null; state: GradeState }
-export interface GradeGroup { subject?: Subject; entries: GradeEntry[]; average?: number }
-export interface GradeReport { groups: GradeGroup[]; average?: number }
+export interface GradeGroup extends ReturnType<typeof calculateGrades> {
+  subject?: Subject
+  entries: GradeEntry[]
+  finalGrade?: number
+}
+export interface GradeReport {
+  groups: GradeGroup[]
+  average?: number
+  finalAverage?: number
+  provisional: boolean
+  usesManualFallback: boolean
+}
 
-/**
- * Notas agrupadas por asignatura, con la media de cada una y la media de las
- * medias (cada asignatura pesa igual). Solo promedian las notas numéricas.
- */
+const roundFinalGrade = (grade: number) => Math.floor(grade + 0.2 + 2 * Number.EPSILON * grade)
+
+/** Cada asignatura activa con nota pesa igual en las dos medias del curso. */
 export function buildGradeReport(subjects: Subject[], events: Event[], today = todayString()): GradeReport {
   const graded = events.filter((event) => event.isGraded)
   const entryOf = (event: Event): GradeEntry => {
-    const value = parseGrade(event.grade)
-    const state: GradeState = value !== null ? "graded" : event.grade?.trim() ? "text" : event.date < today ? "missing" : "upcoming"
+    const value = event.gradeBonus ? parseBonusPoints(event.grade) : parseGrade(event.grade)
+    const state: GradeState = value !== null ? "graded" : event.grade?.trim() ? "text" : isGradePending(event, today) ? "missing" : "upcoming"
     return { event, value, state }
   }
   const byDate = (a: GradeEntry, b: GradeEntry) => b.event.date.localeCompare(a.event.date)
   const known = new Set(subjects.map((subject) => subject.id))
   const make = (subject: Subject | undefined, list: Event[]): GradeGroup => {
     const entries = list.map(entryOf).sort(byDate)
-    return { subject, entries, average: averageGrade(list) }
+    const calculation = calculateGrades([...list.map(eventGrade), ...(subject?.otherGrades ?? [])])
+    const finalGrade = subject?.finalGrade ?? (calculation.average === undefined ? undefined : roundFinalGrade(calculation.average))
+    return { subject, entries, ...calculation, finalGrade }
   }
   const groups: GradeGroup[] = [
     ...[...subjects.filter((subject) => !subject.archived), ...subjects.filter((subject) => subject.archived)].map((subject) =>
       make(subject, graded.filter((event) => event.subjectId === subject.id))),
     make(undefined, graded.filter((event) => !event.subjectId || !known.has(event.subjectId))),
-  ].filter((group) => group.entries.length > 0)
-  const averages = groups.map((group) => group.average).filter((value): value is number => value !== undefined)
-  return { groups, average: averages.length ? averages.reduce((total, value) => total + value, 0) / averages.length : undefined }
+  ].filter((group) => group.entries.length > 0 || (group.subject && !group.subject.archived) ||
+    group.subject?.otherGrades?.length || group.subject?.finalGrade !== undefined)
+  const active = groups.filter(({ subject }) => subject && !subject.archived)
+  const gradedSubjects = active.flatMap(({ average, finalGrade }) =>
+    finalGrade === undefined ? [] : [{ average: average ?? finalGrade, finalGrade, manualFallback: average === undefined }])
+  const count = gradedSubjects.length
+  return {
+    groups,
+    average: count ? gradedSubjects.reduce((sum, group) => sum + group.average, 0) / count : undefined,
+    finalAverage: count ? gradedSubjects.reduce((sum, group) => sum + group.finalGrade, 0) / count : undefined,
+    provisional: active.some((group) => group.finalGrade === undefined || (group.average !== undefined && group.provisional)),
+    usesManualFallback: gradedSubjects.some((group) => group.manualFallback),
+  }
 }
 
 export const formatDaysAway = (days: number) => (days === 0 ? "hoy" : days === 1 ? "mañana" : `en ${days} días`)
 
-export const formatAverage = (value: number) => value.toLocaleString("es", { maximumFractionDigits: 1 })
+export const formatAverage = (value: number) => value.toLocaleString("es", { maximumFractionDigits: 2 })
 
 /** Colores sugeridos para asignaturas nuevas; se elige el primero que aún no está en uso. */
 export const SUBJECT_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ec4899", "#3b82f6", "#8b5cf6", "#ef4444", "#14b8a6"]

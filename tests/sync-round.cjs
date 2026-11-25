@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { syncOnce } = require('../lib/sync/round.ts');
 const { sameState } = require('../lib/sync/merge.ts');
+const { DEFAULT_TIMETABLE } = require('../lib/tasks/timetable.ts');
 
 const task = (id, fields = {}) => ({ id, title: id, description: '', status: 'todo', priority: 'medium', steps: [], tags: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...fields });
 const state = (...tasks) => ({ tasks, events: [], tags: [], subjects: [] });
@@ -200,4 +201,23 @@ test('a first sync against a cloud copy without subjects keeps the subjects of t
   assert.equal(await run(db, d), 'done');
   assert.deepEqual(d.state.subjects, [subject]);
   assert.equal(d.state.tasks.find(t => t.id === 'local').subjectId, 's1');
+});
+
+test('legacy cloud writes retain a saved timetable and explicit removal propagates', async () => {
+  const timetable = { ...DEFAULT_TIMETABLE, updatedAt: '2026-11-25T16:00:00.000Z' };
+  const original = { ...state(task('original')), timetable };
+  const db = cloud(state(task('original'), task('new')));
+  db.row.updated_at = '2099-01-02T00:00:00.000Z';
+  const d = device(original, baseFor(original));
+
+  assert.equal(await run(db, d), 'done');
+  assert.deepEqual(db.row.data.timetable, timetable);
+  assert.ok(d.state.tasks.some(t => t.id === 'new'));
+
+  const other = device(d.state, d.base);
+  d.state = { ...d.state, timetable: null };
+  assert.equal(await run(db, d), 'done');
+  assert.equal(db.row.data.timetable, null);
+  assert.equal(await run(db, other), 'done');
+  assert.equal(other.state.timetable, null);
 });

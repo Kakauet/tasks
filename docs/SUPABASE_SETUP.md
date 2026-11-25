@@ -89,16 +89,9 @@ Ejemplo mínimo de plantilla OTP:
 <p>Tu código es: <strong>{{ .Token }}</strong></p>
 ```
 
-## 5) Deploy
+## 5) Producción en Netlify
 
-Si despliegas en Vercel, añade también esas dos variables en:
-
-- `Project Settings` -> `Environment Variables`
-
-Variables:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+Añade `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` a `.env.production.local` antes de generar la exportación. Para publicar en [tasks-3-5.netlify.app](https://tasks-3-5.netlify.app/), sigue la [guía de despliegue](DEPLOY.md).
 
 ## 6) (Opcional) Login social
 

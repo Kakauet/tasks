@@ -46,9 +46,13 @@ function cleanState(raw: unknown): { data: AppState; warnings: string[] } {
   // Only documented fields can enter the live application state.
   const data:AppState={
     tasks:parsed.tasks.map(t=>({...select(t,["id","title","description","status","priority","dueDate","weeklyPlanDate","weeklyPlanOrder","tags","subjectId","focusSeconds","focusSessions","createdAt","updatedAt"]),steps:t.steps.map(s=>select(s,["id","text","completed"]))})),
-    events:parsed.events.map(e=>({...select(e,["id","title","description","date","endDate","startTime","endTime","isAllDay","isMultiDay","isGraded","grade","tags","subjectId","parentEventId","color"]),...(e.recurrence?{recurrence:select(e.recurrence,["type","interval","endDate","occurrences"])}:{})})),
+    events:parsed.events.map(e=>({...select(e,["id","title","description","date","endDate","startTime","endTime","isAllDay","isMultiDay","isGraded","grade","gradeWeight","gradeBonus","tags","subjectId","parentEventId","color"]),...(e.recurrence?{recurrence:select(e.recurrence,["type","interval","endDate","occurrences"])}:{})})),
     tags:parsed.tags.map(t=>select(t,["id","name","color"])),
-    subjects:parsed.subjects.map(s=>select(s,["id","name","color","archived","manual","aliases"])),
+    subjects:parsed.subjects.map(s=>({
+      ...select(s,["id","name","color","archived","manual","aliases","finalGrade"]),
+      ...(s.otherGrades && { otherGrades: s.otherGrades.map(grade=>select(grade,["id","title","grade","weight","bonus"])) }),
+    })),
+    ...(parsed.timetable !== undefined && { timetable: parsed.timetable }),
   }
   for(const t of data.tasks) if(new Set(t.steps.map(s=>s.id)).size!==t.steps.length) throw new Error("Hay pasos con identificadores duplicados en una tarea.")
   const tagIds=new Set(data.tags.map(t=>t.id))
@@ -108,6 +112,20 @@ export function planImport(current:AppState, incoming:AppState, mode:ImportMode,
   result.events=merge(current.events,incoming.events)
   result.tags=merge(current.tags,incoming.tags)
   result.subjects=merge(current.subjects,incoming.subjects)
+  const timetable = mode === "replace"
+    ? incoming.timetable ?? (current.timetable !== undefined ? null : incoming.timetable)
+    : policy === "incoming" ? incoming.timetable ?? current.timetable : current.timetable ?? incoming.timetable
+  if (timetable !== undefined) result.timetable = timetable
+  if (current.timetable && !timetable) stats.removed++
+  else if (!current.timetable && timetable) stats.added++
+  else if (current.timetable && incoming.timetable) {
+    if (canonicalJson(current.timetable) === canonicalJson(incoming.timetable)) stats.kept++
+    else {
+      stats.conflicts++
+      if (timetable === incoming.timetable) stats.updated++
+      else stats.kept++
+    }
+  }
   return {data:result,stats}
 }
 

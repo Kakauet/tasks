@@ -8,6 +8,8 @@ const { packActivity, validateActivity, track, trackStateChange, flushActivity, 
 const { openLocalDatabase, transactionDone } = require('../lib/data/database.ts');
 const { loadLocalState, saveLocalState, storedStateBytes } = require('../lib/tasks/storage.ts');
 const { getDataUsage } = require('../lib/data/usage.ts');
+const { DEFAULT_TIMETABLE } = require('../lib/tasks/timetable.ts');
+const { repairPersistedState } = require('../lib/tasks/model.ts');
 const { movedEventStartDate } = require('../components/calendar/calendar-event-dnd.tsx');
 const { opaqueDragBackground } = require('../lib/ui/drag-preview-color.ts');
 const task = id => ({ id, title:'Título privado',description:'Descripción privada',status:'todo',priority:'medium',steps:[],tags:[],createdAt:'2026-01-01',updatedAt:'2026-01-01' });
@@ -27,6 +29,24 @@ test('compressed and JSON backups round-trip data, preferences, activity and che
   }
   assert.equal(await checksum({a:1,b:2}),await checksum({b:2,a:1}));
 });
+test('timetable backups preserve breaks and free periods and follow the chosen import policy', async () => {
+  const timetable = { ...DEFAULT_TIMETABLE, updatedAt: '2026-11-25T16:00:00.000Z' };
+  const original = { ...state, timetable };
+  const copy = await inspectBackup(await createBackup(original));
+  assert.deepEqual(copy.payload.data.timetable, timetable);
+
+  const incoming = { ...empty, timetable: { ...timetable, title: 'Otro horario' } };
+  assert.equal(planImport(original, incoming, 'merge', 'keep').data.timetable.title, timetable.title);
+  assert.equal(planImport(original, incoming, 'merge', 'incoming').data.timetable.title, 'Otro horario');
+  assert.equal(planImport(original, empty, 'replace', 'keep').data.timetable, null);
+
+  const invalid = { ...original, timetable: { ...timetable, rows: [timetable.rows[0], { ...timetable.rows[1], start: '08:30' }] } };
+  await assert.rejects(() => createBackup(invalid), /Datos inválidos/);
+  const repaired = repairPersistedState(invalid);
+  assert.equal(repaired.timetable, undefined);
+  assert.deepEqual(repaired.tasks.map(({ id, title }) => ({ id, title })), state.tasks.map(({ id, title }) => ({ id, title })));
+});
+
 test('corruption, truncated gzip, unsupported versions and decompression expansion fail', async()=>{
   const backup=await createBackup(state);
   backup.payload.data.tasks[0].title='Alterado';

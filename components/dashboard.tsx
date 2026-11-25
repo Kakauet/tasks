@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
 Calendar,
+CalendarDays,
 Cloud,
 CloudOff,
 Database,
@@ -39,7 +40,7 @@ Undo,
 User
 } from "lucide-react"
 import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 
@@ -54,6 +55,8 @@ const CalendarView = dynamic(() => import("@/components/calendar-view").then((mo
 const WelcomeDialog = dynamic(() => import("@/components/welcome-dialog").then((mod) => mod.WelcomeDialog), {
   ssr: false,
 })
+
+const TimetableDialog = dynamic(() => import("@/components/subjects/timetable-dialog").then((mod) => mod.TimetableDialog))
 
 import { AppearanceSettings } from "@/components/appearance-settings"
 import { BoardSkeleton } from "@/components/board-skeleton"
@@ -76,6 +79,7 @@ import {
   normalizeBoardColorSelections,
 } from "@/lib/appearance"
 import { readStorage, writeStorage } from "@/lib/storage"
+import { TIMETABLE_ENABLED_KEY } from "@/lib/tasks/timetable"
 
 type ActiveView = "board" | "calendar"
 
@@ -113,6 +117,9 @@ function DashboardContent({
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showAccentSettings, setShowAccentSettings] = useState(false)
+  const [storedTimetableEnabled, setStoredTimetableEnabled] = useState<boolean | null>(null)
+  const [timetableOpen, setTimetableOpen] = useState(false)
+  const timetableTrigger = useRef<HTMLButtonElement | null>(null)
   const [selectedAccentId, setSelectedAccentId] = useState(DEFAULT_ACCENT_PRESET.id)
   const [selectedDarkModeId, setSelectedDarkModeId] = useState(DEFAULT_DARK_MODE_PRESET.id)
   const [boardColorSelections, setBoardColorSelections] = useState<BoardColorSelections>(DEFAULT_BOARD_COLOR_SELECTIONS)
@@ -122,7 +129,7 @@ function DashboardContent({
   const [authMessage, setAuthMessage] = useState<string | null>(null)
   const [authBusy, setAuthBusy] = useState(false)
   const isMobile = useIsMobile()
-  const { canUndo, canRedo, undo, redo, tasks, events, isLoading, syncState, syncNow } = useTaskContext()
+  const { canUndo, canRedo, undo, redo, tasks, events, timetable, isLoading, syncState, syncNow } = useTaskContext()
   const {
     user,
     signInWithMagicLink,
@@ -136,6 +143,12 @@ function DashboardContent({
   } = useAuth()
   const { setTheme, theme } = useTheme()
   const { enabled: subjectsEnabled, setEnabled: setSubjectsEnabled } = useSubjectScope()
+  const timetableEnabled = storedTimetableEnabled ?? !!timetable
+  const openTimetable = (trigger: HTMLButtonElement | null) => {
+    timetableTrigger.current = trigger
+    setTimetableOpen(true)
+  }
+  const timetableLauncher = timetableEnabled && !isLoading ? openTimetable : undefined
   const activeTaskCount = tasks.filter((t) => t.status !== "done").length
   const eventCount = events.length
   const selectedAccentPreset = ACCENT_PRESETS.find((preset) => preset.id === selectedAccentId) ?? DEFAULT_ACCENT_PRESET
@@ -145,6 +158,11 @@ function DashboardContent({
   const cloudLabel = cloudConnected
     ? { synced: "Sincronizado", pending: "Sincronizando", offline: "Sin conexión", error: "Error", disabled: "Sincronizando" }[syncState.status]
     : cloudStatus === "checking" ? "Comprobando" : cloudStatus === "available" ? "Sin sesión" : cloudStatus === "unavailable" ? "No disponible" : "Sin configurar"
+
+  useEffect(() => {
+    const preference = readStorage(TIMETABLE_ENABLED_KEY)
+    setStoredTimetableEnabled(preference === "1" ? true : preference === "0" ? false : null)
+  }, [])
 
   useEffect(() => {
     const preloadSecondaryViews = () => {
@@ -645,6 +663,23 @@ function DashboardContent({
                 />
               </div>
 
+              <div className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground">
+                <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <div className="flex-1 text-left">
+                  <div id="timetable-toggle-label">Horario</div>
+                  <div className="text-xs text-muted-foreground">Acceso al horario de clases</div>
+                </div>
+                <Switch
+                  checked={timetableEnabled}
+                  aria-labelledby="timetable-toggle-label"
+                  onCheckedChange={(checked) => {
+                    setStoredTimetableEnabled(checked)
+                    writeStorage(TIMETABLE_ENABLED_KEY, checked ? "1" : "0")
+                    track("preference.change", { setting: "timetable", value: checked })
+                  }}
+                />
+              </div>
+
               {!isMobile && (
                 <button
                   className="flex w-full items-center px-4 py-3 text-sm text-foreground hover:bg-accent/50 transition-colors duration-200"
@@ -728,10 +763,15 @@ function DashboardContent({
               </button>
 
             </nav>
-            <SubjectHeaderPicker />
+            <SubjectHeaderPicker onOpenTimetable={timetableLauncher} />
             </div>
 
             <div className="flex shrink-0 items-center gap-1 sm:ml-2 sm:gap-2">
+              {!subjectsEnabled && timetableLauncher && (
+                <Button type="button" variant="ghost" size="icon" aria-label="Horario" title="Horario" onClick={(event) => timetableLauncher(event.currentTarget)}>
+                  <CalendarDays />
+                </Button>
+              )}
               {!isMobile && (
                 <>
                   <TooltipProvider>
@@ -784,7 +824,7 @@ function DashboardContent({
 
       {/* La misma estructura con y sin asignaturas: activar la función solo abre sitio a la barra lateral. */}
       <div className="workspace-container flex min-h-0 flex-1">
-        <SubjectSidebar show={subjectsEnabled && !isLoading} ready={!isLoading} />
+        <SubjectSidebar show={subjectsEnabled && !isLoading} ready={!isLoading} onOpenTimetable={timetableLauncher} />
         <main id="main-content" tabIndex={-1} className="-mr-3 min-h-0 min-w-0 flex-1 overflow-y-auto py-3 pr-3 outline-none sm:-mr-6 sm:py-5 sm:pr-6">
           <div id="board-panel" className="h-full min-h-0" role="tabpanel" aria-labelledby="board-tab" hidden={activeView !== "board"}>
             {activeView === "board" && (isLoading ? <BoardSkeleton /> : <TaskBoard />)}
@@ -800,6 +840,7 @@ function DashboardContent({
       <AppearanceSettings open={showAccentSettings} onOpenChange={setShowAccentSettings} selectedAccentId={selectedAccentId} selectedDarkModeId={selectedDarkModeId} boardColorSelections={boardColorSelections} handleAccentPresetChange={handleAccentPresetChange} handleDarkModePresetChange={handleDarkModePresetChange} handleBoardColorChange={handleBoardColorChange} />
 
       <KeyboardShortcuts open={showKeyboardShortcuts} onOpenChange={setShowKeyboardShortcuts} />
+      {timetableOpen && <TimetableDialog onClose={() => setTimetableOpen(false)} onRestoreFocus={() => timetableTrigger.current?.focus()} />}
     </div>
   )
 }

@@ -19,7 +19,13 @@ const nextVersion = (previous: string | null) => {
  */
 export function withoutLegacyGaps(raw: unknown, remote: AppState, known: AppState): AppState {
   const hasSubjects = typeof raw === "object" && raw !== null && Array.isArray((raw as { subjects?: unknown }).subjects)
-  return hasSubjects ? remote : { ...remote, subjects: known.subjects }
+  const missingTimetable = remote.timetable === undefined && known.timetable !== undefined
+  if (hasSubjects && !missingTimetable) return remote
+  return {
+    ...remote,
+    ...(!hasSubjects && { subjects: known.subjects }),
+    ...(missingTimetable && { timetable: known.timetable }),
+  }
 }
 
 /** Effects are supplied by the lifecycle hook; this round has no React or browser dependency. */

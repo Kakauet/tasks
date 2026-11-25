@@ -22,7 +22,7 @@ La aplicación mantiene un único estado de tareas, eventos y etiquetas. `contex
 - Al crear, renombrar, añadirle un apodo o desarchivar una asignatura (`applyTitleDetection` con `only`): lo que aún no tiene asignatura y la nombra pasa a ella, en una entrada de historial propia, así que «Deshacer» devuelve las asignaciones y conserva la asignatura.
 - Una vez por dispositivo al cargar datos de versiones anteriores (`taskmaster-title-detection` en `localStorage`): los exámenes existentes pasan a calificables y las asignaturas existentes recogen lo que las nombra. El resultado cuenta como cambio local y se sube a la nube.
 
-También construye el informe de notas (`buildGradeReport`), que solo promedia notas numéricas y calcula la media general como media de las medias por asignatura.
+También construye el informe de notas (`buildGradeReport`). Combina las calificaciones numéricas del calendario con las notas sueltas de cada asignatura y aplica sus pesos. Las asignaturas activas con nota pesan lo mismo en la media de las calificaciones calculadas y en la media de las notas finales.
 
 `context/subject-scope.tsx` guarda, en preferencias locales del dispositivo, si la función está activa y si la barra está contraída. El filtro no se guarda: la aplicación siempre abre en «todas». Con la función apagada el filtro efectivo es siempre «todas» y ningún componente pinta nada de asignaturas. El tablero y el calendario aplican el filtro con `scopeTasks`/`scopeEvents`; el color de un evento sin color propio se resuelve al mostrarlo y no se escribe en el dato.
 

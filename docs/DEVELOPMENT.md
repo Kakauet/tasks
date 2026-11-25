@@ -55,6 +55,10 @@ docs/         Arquitectura, datos, diseño y configuración
 
 El punto de entrada del estado es `context/task-context.tsx`. Las decisiones sobre sus límites y la integridad de datos están en [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Esquinas del horario
+
+Conserva los centros compartidos entre las esquinas inferiores del diálogo y las de la cuadrícula, y entre el acceso lateral y su fondo al pasar el cursor. El radio exterior es el radio interior más el margen uniforme y el grosor del borde exterior. El desplazamiento va dentro del marco de la cuadrícula para que la barra de desplazamiento no altere la alineación.
+
 ## Comprobaciones opcionales de navegador
 
 Los scripts de navegador son opcionales y usan Playwright instalado externamente; no forman parte de `npm test` ni de CI. No requieren añadir dependencias al proyecto. Para `browser-check.cjs`, utiliza una instalación existente de Playwright y Edge o Chrome ya instalado. Inicia el servidor en una terminal:

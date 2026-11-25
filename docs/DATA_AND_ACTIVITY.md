@@ -25,13 +25,18 @@ Estos campos contienen el contenido que el usuario ya guarda en la aplicación, 
 | --- | --- |
 | Tarea | `id`, `title`, `description`, `status`, `priority`, `dueDate`, `weeklyPlanDate`, `weeklyPlanOrder`, `steps`, `tags`, `subjectId`, `focusSeconds`, `focusSessions`, `createdAt`, `updatedAt` |
 | Paso | `id`, `text`, `completed` |
-| Evento | `id`, `title`, `description`, `date`, `endDate`, `startTime`, `endTime`, `isAllDay`, `isMultiDay`, `isGraded`, `grade`, `tags`, `subjectId`, `recurrence`, `parentEventId`, `color` |
+| Evento | `id`, `title`, `description`, `date`, `endDate`, `startTime`, `endTime`, `isAllDay`, `isMultiDay`, `isGraded`, `grade`, `gradeWeight`, `gradeBonus`, `tags`, `subjectId`, `recurrence`, `parentEventId`, `color` |
 | Repetición | `type`, `interval`, `endDate`, `occurrences` |
 | Etiqueta | `id`, `name`, `color` |
-| Asignatura | `id`, `name`, `color`, `archived`, `manual`, `aliases` |
+| Asignatura | `id`, `name`, `color`, `archived`, `manual`, `aliases`, `finalGrade`, `otherGrades` |
+| Nota independiente | `id`, `title`, `grade`, `weight`, `bonus` |
+| Horario | `title`, `rows`, `updatedAt` |
+| Franja del horario | `id`, `start`, `end`, `kind` y `lessons` (clases de lunes a viernes) o `label` (descanso) |
 | Apariencia opcional | Tema claro/oscuro/sistema, preset de acento, preset oscuro y colores de las columnas |
 
 La lista `subjects` y el campo `subjectId` son opcionales: las copias y los datos guardados antes de las asignaturas se leen como «sin asignaturas». Una referencia a una asignatura que no existe se muestra como «sin asignatura» y se conserva por si la copia se combina con otra. La preferencia de mostrar o no la función es local del dispositivo y no viaja en las copias. Una copia en la nube escrita por una versión anterior, sin la lista `subjects`, no borra las asignaturas: se conserva la lista conocida y se vuelve a subir completa. Al abrir por primera vez la versión con asignaturas, los eventos con «examen» en el título pasan a ser calificables (una vez por dispositivo).
+
+El horario guardado se incluye en las copias y en la sincronización. La preferencia de mostrar su acceso se guarda en cada dispositivo.
 
 Los campos opcionales se conservan cuando corresponden al estado normalizado de la aplicación. No se incluyen credenciales, sesión de Supabase, cachés, historial de deshacer/rehacer ni filtros transitorios como ajustes restaurables.
 

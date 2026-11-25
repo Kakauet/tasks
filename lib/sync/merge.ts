@@ -134,14 +134,22 @@ const eventOptions = (hasBase: boolean): MergeOptions<Event> => ({
 
 const tagOptions = (hasBase: boolean): MergeOptions<TaskTag> => ({ winner: hasBase ? preferLocal : preferRemote })
 
-const subjectOptions = (hasBase: boolean): MergeOptions<Subject> => ({ winner: hasBase ? preferLocal : preferRemote })
+const subjectOptions = (hasBase: boolean): MergeOptions<Subject> => ({
+  winner: hasBase ? preferLocal : preferRemote,
+  nested: {
+    otherGrades: (base, local, remote, winner) =>
+      mergeList(hasBase && Array.isArray(base) ? base : null,
+        (local ?? []) as NonNullable<Subject["otherGrades"]>, (remote ?? []) as NonNullable<Subject["otherGrades"]>, { winner: () => winner }),
+    finalGrade: (_base, local, remote) => hasBase ? local : remote ?? local,
+  },
+})
 
 const normalizedName = (name: string) => name.trim().toLocaleLowerCase("es")
 
 /** True when a device holds nothing but the starter tags. */
 export const isBlankState = (state: AppState) => {
   const defaults = new Set(DEFAULT_TAG_TEMPLATES.map((tag) => normalizedName(tag.name)))
-  return state.tasks.length === 0 && state.events.length === 0 && state.subjects.length === 0 && state.tags.every((tag) => defaults.has(normalizedName(tag.name)))
+  return !state.timetable && state.tasks.length === 0 && state.events.length === 0 && state.subjects.length === 0 && state.tags.every((tag) => defaults.has(normalizedName(tag.name)))
 }
 
 /** Names that match in both copies identify the same record when there is no common ancestor. */
@@ -173,10 +181,18 @@ function adoptRemoteNames(local: AppState, remote: AppState): AppState {
     }
   }
   return {
+    ...local,
     tasks: local.tasks.map(retarget),
     events: local.events.map(retarget),
     tags: local.tags.filter((tag) => !renamedTags.has(tag.id)),
-    subjects: local.subjects.filter((subject) => !renamedSubjects.has(subject.id)),
+    subjects: local.subjects.flatMap((subject) => {
+      const matchedId = renamedSubjects.get(subject.id)
+      if (!matchedId) return [subject]
+      const matched = remote.subjects.find(({ id }) => id === matchedId)
+      if (!matched || (subject.finalGrade === undefined && !subject.otherGrades?.length)) return []
+      // Keep the cloud subject's metadata while merging grades from both copies.
+      return [{ ...matched, finalGrade: subject.finalGrade, otherGrades: subject.otherGrades }]
+    }),
   }
 }
 
@@ -232,13 +248,27 @@ function dropDanglingReferences(merged: AppState, inputs: AppState[]): AppState 
   }
 
   return {
+    ...merged,
     tasks: merged.tasks.map(withoutDeleted),
     events: merged.events
       .filter((event) => !event.parentEventId || eventIds.has(event.parentEventId) || !knownEventIds.has(event.parentEventId))
       .map(withoutDeleted),
-    tags: merged.tags,
-    subjects: merged.subjects,
   }
+}
+
+/**
+ * Treat a timetable as a single document so divergent edits cannot create
+ * overlapping time slots. An omitted copy in the cloud can be a legacy write.
+ */
+function mergeTimetable(base: AppState["timetable"], local: AppState["timetable"], remote: AppState["timetable"]) {
+  const nextLocal = local === undefined && base !== undefined ? null : local
+  const nextRemote = remote === undefined ? base : remote
+  const unchanged = (timetable: AppState["timetable"]) => same({ timetable }, { timetable: base })
+
+  if (unchanged(nextRemote)) return nextLocal
+  if (unchanged(nextLocal) || !nextLocal) return nextRemote
+  if (!nextRemote || nextLocal.updatedAt > nextRemote.updatedAt) return nextLocal
+  return nextRemote
 }
 
 /**
@@ -252,6 +282,7 @@ export function mergeStates(base: AppState | null, local: AppState, remote: AppS
   const hasBase = !!base
   const localSide = base ? local : adoptRemoteNames(local, remote)
 
+  const timetable = mergeTimetable(base?.timetable, local.timetable, remote.timetable)
   const events = mergeList(base?.events ?? null, localSide.events, remote.events, eventOptions(hasBase))
   const merged = dropDanglingReferences(
     {
@@ -259,6 +290,7 @@ export function mergeStates(base: AppState | null, local: AppState, remote: AppS
       events: resolveSeries(base?.events ?? null, localSide.events, remote.events, events),
       tags: mergeList(base?.tags ?? null, localSide.tags, remote.tags, tagOptions(hasBase)),
       subjects: mergeList(base?.subjects ?? null, localSide.subjects, remote.subjects, subjectOptions(hasBase)),
+      ...(timetable !== undefined && { timetable }),
     },
     base ? [base, local, remote] : [local, remote],
   )

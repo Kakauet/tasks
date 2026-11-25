@@ -20,6 +20,7 @@ export interface SubjectScopeValue {
   setScope: (scope: SubjectScope) => void
   collapsed: boolean
   setCollapsed: (collapsed: boolean) => void
+  today: string
   /** Prioridad mínima de una tarea pendiente para que impida estar al día. */
   threshold: PendingThreshold
   setThreshold: (threshold: PendingThreshold) => void
@@ -59,7 +60,7 @@ export function SubjectScopeProvider({ children }: { children: ReactNode }) {
     if (isThreshold(savedThreshold)) setThresholdState(savedThreshold)
   }, [])
 
-  // El estado «al día» depende de la fecha: se recalcula al cambiar de día.
+  // Los indicadores de fecha se recalculan al cambiar de día.
   useEffect(() => {
     const refresh = () => setToday(todayString())
     const timer = window.setInterval(refresh, 60_000)
@@ -122,6 +123,7 @@ export function SubjectScopeProvider({ children }: { children: ReactNode }) {
       setScope,
       collapsed,
       setCollapsed,
+      today,
       threshold,
       setThreshold,
       activeSubjects,
@@ -135,14 +137,14 @@ export function SubjectScopeProvider({ children }: { children: ReactNode }) {
       openManager,
       openGrades,
     }),
-    [openManager, openGrades, threshold, setThreshold, enabled, setEnabled, scope, setScope, collapsed, setCollapsed, activeSubjects, selectedSubject, summaries, subjectOf, scopeTasks, scopeEvents, eventColor],
+    [openManager, openGrades, threshold, setThreshold, enabled, setEnabled, scope, setScope, collapsed, setCollapsed, today, activeSubjects, selectedSubject, summaries, subjectOf, scopeTasks, scopeEvents, eventColor],
   )
 
   return (
     <SubjectScopeContext.Provider value={value}>
       {children}
       {manager.open && <SubjectsDialog open editId={manager.editId} threshold={threshold} onThresholdChange={setThreshold} onOpenChange={(open) => !open && setManager({ open: false })} />}
-      {gradesOpen && <GradesDialog open onOpenChange={setGradesOpen} />}
+      {gradesOpen && <GradesDialog open onOpenChange={setGradesOpen} today={today} />}
     </SubjectScopeContext.Provider>
   )
 }

@@ -7,6 +7,7 @@ import { useDrag, useDrop, type DragSourceMonitor } from "react-dnd"
 import { getEmptyImage } from "react-dnd-html5-backend"
 import type { Event } from "@/context/task-context"
 import { entityKey, track } from "@/lib/activity"
+import { GRADE_PENDING_LABEL } from "@/lib/tasks/subjects"
 import { cn } from "@/lib/utils"
 import { calendarEventPreviewColor } from "@/lib/ui/drag-preview-color"
 
@@ -33,10 +34,11 @@ interface EventSurfaceProps extends Omit<ComponentPropsWithoutRef<"div">, "onCli
   anchorDate: string
   onOpen: (event: Event) => void
   actionLabel?: string
+  gradePending?: boolean
   children: ReactNode
 }
 
-export const CalendarEventDragSurface = forwardRef<HTMLDivElement, EventSurfaceProps>(function CalendarEventDragSurface({ event, anchorDate, onOpen, actionLabel, className, style, children, ...triggerProps }, forwardedRef) {
+export const CalendarEventDragSurface = forwardRef<HTMLDivElement, EventSurfaceProps>(function CalendarEventDragSurface({ event, anchorDate, onOpen, actionLabel, gradePending, className, style, children, ...triggerProps }, forwardedRef) {
   const nodeRef = useRef<HTMLDivElement | null>(null)
   const suppressClickUntil = useRef(0)
   const startedAt = useRef(0)
@@ -114,7 +116,7 @@ export const CalendarEventDragSurface = forwardRef<HTMLDivElement, EventSurfaceP
     data-calendar-dragging={isDragging ? "true" : undefined}
     role="button"
     tabIndex={0}
-    aria-label={actionLabel ?? `Ver detalle de ${event.title}. Arrastrar para mover de fecha.`}
+    aria-label={`${actionLabel ?? `Ver detalle de ${event.title}. Arrastrar para mover de fecha.`}${gradePending ? ` ${GRADE_PENDING_LABEL}.` : ""}`}
     onClick={click => { click.stopPropagation(); if (Date.now() >= suppressClickUntil.current) onOpen(event) }}
     onKeyDown={key => {
       if (key.key === "Enter" || key.key === " ") {

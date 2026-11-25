@@ -1,6 +1,7 @@
 import { format, isValid, parseISO } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
-import type { AppState, Event, EventRecurrence, Subject, Task, TaskTag } from "./types";
+import type { AppState, Event, EventRecurrence, OtherGrade, Subject, Task, TaskTag } from "./types";
+import { parseTimetable } from "./timetable";
 
 export const DEFAULT_TAG_TEMPLATES: Array<{ name: string; color: string }> = [
   { name: "Trabajo", color: "#3b82f6" },
@@ -79,6 +80,8 @@ export const normalizeEventRecord = (event: Event): Event => {
     startTime: event.isAllDay ? undefined : event.startTime,
     endTime: event.isAllDay ? undefined : event.endTime,
     grade: event.isGraded ? event.grade : undefined,
+    ...(hasOwn(event, "gradeWeight") && { gradeWeight: event.isGraded && !event.gradeBonus && isGradeWeight(event.gradeWeight) ? event.gradeWeight : undefined }),
+    ...(hasOwn(event, "gradeBonus") && { gradeBonus: event.isGraded && event.gradeBonus === true ? true : undefined }),
   }
 
   return normalizedEvent
@@ -110,12 +113,16 @@ export const normalizeEventPatch = (event: Partial<Event>): Partial<Event> => {
 
   if (hasOwn(event, "isGraded") && !event.isGraded) {
     normalizedEvent.grade = undefined
+    normalizedEvent.gradeWeight = undefined
+    normalizedEvent.gradeBonus = undefined
   }
 
   return normalizedEvent
 }
 
-export const parsePersistedState = (raw: unknown): AppState | null => {
+export const parsePersistedState = (raw: unknown): AppState | null => parseState(raw, true)
+
+function parseState(raw: unknown, strictTimetable: boolean): AppState | null {
   if (!raw || typeof raw !== "object") return null
 
   const candidate = raw as Partial<AppState>
@@ -125,6 +132,8 @@ export const parsePersistedState = (raw: unknown): AppState | null => {
   // Las copias anteriores a las asignaturas no traen la lista: se leen como vacías.
   const subjects = candidate.subjects === undefined ? [] : candidate.subjects
   if (!Array.isArray(subjects) || !subjects.every(isSubject)) return null
+  const timetable = candidate.timetable === null ? null : parseTimetable(candidate.timetable)
+  if (strictTimetable && candidate.timetable !== undefined && timetable === undefined) return null
   if (!candidate.tasks.every(isTask) || !candidate.events.every(isEvent) || !candidate.tags.every(isTag)) return null
   for (const records of [candidate.tasks, candidate.events, candidate.tags, subjects]) {
     if (new Set(records.map((record) => record.id)).size !== records.length) return null
@@ -135,6 +144,7 @@ export const parsePersistedState = (raw: unknown): AppState | null => {
     events: (candidate.events as Event[]).map(normalizeEventRecord),
     tags: candidate.tags,
     subjects,
+    ...(timetable !== undefined && { timetable }),
   }
 }
 
@@ -145,7 +155,7 @@ export const parsePersistedState = (raw: unknown): AppState | null => {
  * using the strict parser, which rejects the whole file instead.
  */
 export const repairPersistedState = (raw: unknown): AppState | null => {
-  const strict = parsePersistedState(raw)
+  const strict = parseState(raw, false)
   if (strict) return strict
   if (!record(raw) || (!Array.isArray(raw.tasks) && !Array.isArray(raw.events) && !Array.isArray(raw.tags))) return null
 
@@ -200,6 +210,8 @@ export const repairPersistedState = (raw: unknown): AppState | null => {
       isMultiDay: optionalBoolean(event.isMultiDay),
       isGraded: event.isGraded === true,
       grade: optionalText(event.grade),
+      ...(isGradeWeight(event.gradeWeight) && { gradeWeight: event.gradeWeight }),
+      ...(event.gradeBonus === true && { gradeBonus: true }),
       tags: tagIds(event.tags),
       subjectId: optionalId(event.subjectId),
       parentEventId: nonEmptyString(event.parentEventId) ? event.parentEventId : undefined,
@@ -226,9 +238,20 @@ export const repairPersistedState = (raw: unknown): AppState | null => {
     archived: subject.archived === true ? true : undefined,
     manual: subject.manual === "upToDate" ? ("upToDate" as const) : subject.manual === "pending" ? ("pending" as const) : undefined,
     aliases: cleanAliases(subject.aliases, text(subject.name, "Asignatura")),
+    ...(isFinalGrade(subject.finalGrade) && { finalGrade: subject.finalGrade }),
+    ...(Array.isArray(subject.otherGrades) && {
+      otherGrades: withId(list(subject.otherGrades)).map((grade) => ({
+        id: grade.id,
+        title: text(grade.title, "Nota"),
+        grade: optionalText(grade.grade),
+        weight: isGradeWeight(grade.weight) ? grade.weight : undefined,
+        ...(grade.bonus === true && { bonus: true }),
+      })),
+    }),
   }))
 
-  return { tasks, events, tags, subjects }
+  const timetable = raw.timetable === null ? null : parseTimetable(raw.timetable)
+  return { tasks, events, tags, subjects, ...(timetable !== undefined && { timetable }) }
 }
 
 export const validateTask = (task: Partial<Task>): boolean => {
@@ -272,6 +295,15 @@ const optionalDate = (value: unknown) => value === undefined || value === "" || 
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(nonEmptyString)
 const optionalString = (value: unknown) => value === undefined || typeof value === "string"
 const optionalCount = (value: unknown) => value === undefined || (typeof value === "number" && Number.isFinite(value) && value >= 0)
+const isGradeWeight = (value: unknown): value is number => typeof value === "number" && value >= 0 && value <= 100
+const isFinalGrade = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 10
+const optionalGradeWeight = (value: unknown) => value === undefined || isGradeWeight(value)
+
+function isOtherGrade(value: unknown): value is OtherGrade {
+  return record(value) && nonEmptyString(value.id) && nonEmptyString(value.title) &&
+    optionalString(value.grade) && optionalGradeWeight(value.weight) &&
+    (value.bonus === undefined || typeof value.bonus === "boolean")
+}
 
 function isTag(value: unknown): value is TaskTag {
   return record(value) && nonEmptyString(value.id) && nonEmptyString(value.name) && nonEmptyString(value.color)
@@ -281,7 +313,10 @@ function isSubject(value: unknown): value is Subject {
   return record(value) && nonEmptyString(value.id) && nonEmptyString(value.name) && nonEmptyString(value.color) &&
     (value.archived === undefined || typeof value.archived === "boolean") &&
     (value.manual === undefined || value.manual === "upToDate" || value.manual === "pending") &&
-    (value.aliases === undefined || strings(value.aliases))
+    (value.aliases === undefined || strings(value.aliases)) &&
+    (value.finalGrade === undefined || isFinalGrade(value.finalGrade)) &&
+    (value.otherGrades === undefined || (Array.isArray(value.otherGrades) && value.otherGrades.every(isOtherGrade) &&
+      new Set(value.otherGrades.map((grade) => grade.id)).size === value.otherGrades.length))
 }
 
 function isTask(value: unknown): value is Task {
@@ -299,8 +334,9 @@ function isEvent(value: unknown): value is Event {
   if (!record(value) || !nonEmptyString(value.id) || !nonEmptyString(value.title) ||
     typeof value.description !== "string" || !validDate(value.date) || !strings(value.tags) ||
     !optionalDate(value.endDate) || typeof value.isGraded !== "boolean") return false
-  if (["isAllDay", "isMultiDay"].some((key) => value[key] !== undefined && typeof value[key] !== "boolean")) return false
+  if (["isAllDay", "isMultiDay", "gradeBonus"].some((key) => value[key] !== undefined && typeof value[key] !== "boolean")) return false
   if (["startTime", "endTime", "grade", "parentEventId", "color", "subjectId"].some((key) => !optionalString(value[key]))) return false
+  if (!optionalGradeWeight(value.gradeWeight)) return false
   if (value.isMultiDay && (!validDate(value.endDate) || parseISO(value.endDate) < parseISO(value.date))) return false
   if (value.recurrence !== undefined) {
     const r = value.recurrence

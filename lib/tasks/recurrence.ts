@@ -42,6 +42,8 @@ export const generateRecurringEvents =(baseEvent: Event, recurrence: EventRecurr
 
       const newEvent: Event = {
         ...baseEvent,
+        gradeWeight: undefined,
+        ...(baseEvent.gradeBonus && { grade: undefined }),
         id: uuidv4(),
         date: eventDate,
         endDate: eventEndDate,

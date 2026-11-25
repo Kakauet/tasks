@@ -6,7 +6,7 @@ const { renderToStaticMarkup } = require('react-dom/server');
 const { useTaskOperations } = require('../hooks/use-task-operations.ts');
 const { createHistory, recordHistory, undoHistory, redoHistory } = require('../lib/tasks/history.ts');
 const { parsePersistedState, repairPersistedState } = require('../lib/tasks/model.ts');
-const { summarizeSubject, inScope, parseGrade, averageGrade, formatDaysAway, countsAsPending, isThreshold, looksLikeExam, findSubjectInTitle, buildGradeReport, applyTitleDetection, describeDetection } = require('../lib/tasks/subjects.ts');
+const { summarizeSubject, inScope, isGradePending, parseGrade, averageGrade, formatDaysAway, countsAsPending, isThreshold, looksLikeExam, findSubjectInTitle, buildGradeReport, applyTitleDetection, describeDetection } = require('../lib/tasks/subjects.ts');
 const { mergeStates } = require('../lib/sync/merge.ts');
 const { inspectBackup, createBackup, planImport } = require('../lib/data/backup.ts');
 
@@ -15,6 +15,21 @@ const task = (id, fields = {}) => ({ id, title: id, description: '', status: 'to
 const event = (id, fields = {}) => ({ id, title: id, description: '', date: '2026-01-05', isGraded: false, tags: [], ...fields });
 const subject = (id, name = id, fields = {}) => ({ id, name, color: '#3b82f6', ...fields });
 const state = (tasks = [], events = [], tags = [], subjects = []) => ({ tasks, events, tags, subjects });
+
+test('a pending grade only appears after the last scheduled day of an evaluable event', () => {
+  const exam = event('exam', { date: '2026-03-09', isGraded: true, grade: '  ' });
+  assert.equal(isGradePending(exam, TODAY), true);
+  assert.equal(isGradePending({ ...exam, date: TODAY }, TODAY), false);
+  assert.equal(isGradePending({ ...exam, date: '2026-03-11' }, TODAY), false);
+  assert.equal(isGradePending({ ...exam, isGraded: false }, TODAY), false);
+  assert.equal(isGradePending({ ...exam, grade: '0' }, TODAY), false);
+  assert.equal(isGradePending({ ...exam, grade: 'Notable' }, TODAY), false);
+  const multiDay = { ...exam, isMultiDay: true, endDate: TODAY };
+  assert.equal(isGradePending(multiDay, TODAY), false);
+  assert.equal(isGradePending(multiDay, '2026-03-11'), true);
+  assert.equal(buildGradeReport([], [multiDay], TODAY).groups[0].entries[0].state, 'upcoming');
+  assert.equal(buildGradeReport([], [multiDay], '2026-03-11').groups[0].entries[0].state, 'missing');
+});
 
 function commands(initial) {
   let history = createHistory(initial), api;
@@ -105,7 +120,7 @@ test('the grade report groups graded events per subject, averages numeric grades
     event('e3', { subjectId: 'es', date: '2026-03-09', isGraded: true }),
     event('e4', { subjectId: 'fis', date: '2026-03-20', isGraded: true }),
     event('e5', { subjectId: 'fis', date: '2026-02-01', isGraded: true, grade: 'Notable' }),
-    event('e6', { subjectId: 'old', date: '2026-01-01', isGraded: true, grade: '4' }),
+    event('e6', { subjectId: 'old', date: '2026-01-01', isGraded: true, grade: '2' }),
     event('e7', { date: '2026-01-02', isGraded: true, grade: '10' }),
     event('plain', { subjectId: 'es', date: '2026-03-01', grade: '1' }),
   ];
@@ -117,7 +132,9 @@ test('the grade report groups graded events per subject, averages numeric grades
   const fis = report.groups[1];
   assert.equal(fis.average, undefined);
   assert.deepEqual(fis.entries.map(e => e.state), ['upcoming', 'text']);
-  assert.equal(report.average, (7 + 4 + 10) / 3);
+  assert.equal(report.average, 7);
+  assert.equal(report.finalAverage, 7);
+  assert.equal(report.provisional, true);
   assert.equal(buildGradeReport([], [event('x')], TODAY).groups.length, 0);
   assert.equal(buildGradeReport([], [], TODAY).average, undefined);
 });
@@ -130,6 +147,106 @@ test('grades average numeric values only, with commas and fractions', () => {
   const events = [event('a', { isGraded: true, grade: '6' }), event('b', { isGraded: true, grade: '8' }), event('c', { isGraded: true, grade: 'Sobresaliente' }), event('d', { grade: '1' })];
   assert.equal(averageGrade(events), 7);
   assert.equal(averageGrade([event('e')]), undefined);
+});
+
+test('weighted grades show a provisional mean and use x.8 for final rounding', () => {
+  const grades = [event('exam', { subjectId: 'math', isGraded: true, grade: '8', gradeWeight: 40 })];
+  const math = subject('math', 'Matemáticas', { otherGrades: [{ id: 'work', title: 'Trabajo' }] });
+  let report = buildGradeReport([math], grades, TODAY);
+  assert.equal(report.average, 8);
+  assert.equal(report.groups[0].evaluatedWeight, 40);
+  assert.equal(report.groups[0].sharedWeight, undefined);
+  assert.equal(report.provisional, true);
+
+  math.otherGrades[0].grade = '23/30';
+  report = buildGradeReport([math], grades, TODAY);
+  assert.ok(Math.abs(report.average - 7.8) < 1e-12);
+  assert.equal(report.finalAverage, 8);
+  assert.equal(report.groups[0].evaluatedWeight, 100);
+  assert.equal(report.provisional, false);
+
+  math.otherGrades[0].grade = '7,65';
+  const language = subject('es', 'Castellano', { finalGrade: 6, otherGrades: [{ id: 'oral', title: 'Oral', grade: '9' }] });
+  report = buildGradeReport([math, language], grades, TODAY);
+  assert.equal(report.groups[0].finalGrade, 7);
+  assert.ok(Math.abs(report.average - (7.79 + 9) / 2) < 1e-12);
+  assert.equal(report.finalAverage, 6.5);
+  assert.equal(report.usesManualFallback, false);
+
+  const manualOnly = buildGradeReport([subject('art', 'Arte', { finalGrade: 0 })], [], TODAY);
+  assert.equal(manualOnly.average, 0);
+  assert.equal(manualOnly.finalAverage, 0);
+  assert.equal(manualOnly.usesManualFallback, true);
+});
+
+test('automatic weights split the remainder among numeric grades already entered', () => {
+  const dt = subject('dt', 'DT', { otherGrades: [{ id: 'book', title: 'Libreta', grade: '5', weight: 10 }] });
+  const exams = ['7,5', '7,8', '8,6', undefined, undefined, 'Pendiente'].map((grade, i) =>
+    event(`exam-${i}`, { subjectId: dt.id, isGraded: true, grade }));
+  const report = buildGradeReport([dt], exams, TODAY);
+  assert.equal(report.groups[0].automaticWeight, 30);
+  assert.equal(report.groups[0].evaluatedWeight, 100);
+  assert.ok(Math.abs(report.average - 7.67) < 1e-12);
+  assert.equal(report.finalAverage, 7);
+
+  exams[3].gradeWeight = 30;
+  const withReservedWeight = buildGradeReport([dt], exams, TODAY);
+  assert.equal(withReservedWeight.groups[0].automaticWeight, 20);
+  assert.equal(withReservedWeight.groups[0].evaluatedWeight, 70);
+});
+
+test('bonus items add points without changing weights and survive a backup', async () => {
+  const dt = subject('dt', 'DT', { otherGrades: [
+    { id: 'book', title: 'Libreta', grade: '5', weight: 10 },
+    { id: 'extra', title: 'Voluntario', grade: '0,5', bonus: true },
+  ] });
+  const exams = [
+    event('exam', { subjectId: dt.id, isGraded: true, grade: '8' }),
+    event('bonus', { subjectId: dt.id, isGraded: true, grade: '0,25', gradeBonus: true }),
+    event('upcoming', { subjectId: dt.id, isGraded: true, gradeBonus: true }),
+  ];
+  const data = state([], exams, [], [dt]);
+  const { payload } = await inspectBackup(JSON.parse(JSON.stringify(await createBackup(data))));
+  const report = buildGradeReport(payload.data.subjects, payload.data.events, TODAY);
+  assert.equal(report.groups[0].automaticWeight, 90);
+  assert.equal(report.groups[0].evaluatedWeight, 100);
+  assert.equal(report.groups[0].provisional, false);
+  assert.equal(report.average, 8.45);
+
+  exams[1].grade = '4';
+  assert.equal(buildGradeReport([dt], exams, TODAY).average, 10);
+  assert.equal(buildGradeReport([subject('dt')], exams.slice(1), TODAY).average, undefined);
+});
+
+test('weights and standalone grades survive backup, undo and concurrent subject edits', async () => {
+  const initial = state([], [event('exam', { subjectId: 'math', isGraded: true, grade: '8' })], [], [subject('math')]);
+  const d = commands(initial);
+  const work = { id: 'work', title: 'Trabajo', grade: '7,5', weight: 60 };
+  d.api.updateEvent('exam', { gradeWeight: 40 });
+  d.api.updateSubject('math', { otherGrades: [work], finalGrade: 9 });
+  d.undo();
+  assert.equal(d.history.present.subjects[0].finalGrade, undefined);
+  d.redo();
+  const local = d.history.present;
+  const backup = await inspectBackup(JSON.parse(JSON.stringify(await createBackup(local))));
+  assert.equal(backup.payload.data.events[0].gradeWeight, 40);
+  assert.equal(backup.payload.data.subjects[0].finalGrade, 9);
+  assert.deepEqual(backup.payload.data.subjects[0].otherGrades, [work]);
+
+  const oral = { id: 'oral', title: 'Oral', grade: '8' };
+  const remote = state([], initial.events, [], [subject('math', 'math', { otherGrades: [oral] })]);
+  const merged = mergeStates(initial, local, remote);
+  assert.deepEqual(merged.subjects[0].otherGrades, [work, oral]);
+  assert.equal(merged.subjects[0].finalGrade, 9);
+  const firstSync = mergeStates(null, local, {
+    ...remote,
+    events: [{ ...remote.events[0], id: 'cloud-exam', subjectId: 'cloud-math' }],
+    subjects: [{ ...remote.subjects[0], id: 'cloud-math' }],
+  });
+  assert.deepEqual(firstSync.subjects[0].otherGrades, [work, oral]);
+  assert.equal(firstSync.subjects[0].finalGrade, 9);
+  assert.equal(firstSync.events.find(e => e.id === 'exam').subjectId, 'cloud-math');
+  assert.equal(firstSync.events.find(e => e.id === 'exam').gradeWeight, 40);
 });
 
 test('scope keeps everything, unassigned items or one subject; a deleted subject id reads as unassigned', () => {

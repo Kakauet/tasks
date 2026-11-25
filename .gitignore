@@ -23,8 +23,9 @@ yarn-error.log*
 .env*
 !.env.example
 
-# Vercel
-.vercel
+# Estado local de despliegue
+.netlify/
+.vercel/
 
 # TypeScript
 *.tsbuildinfo

@@ -39,7 +39,7 @@ const trimmedTitle = (value: unknown) => (typeof value === "string" ? value.trim
 /** Fields that decide where the occurrences of a recurring series fall. */
 const SCHEDULE_FIELDS: Array<keyof Event> = ["date", "endDate", "isMultiDay", "recurrence"]
 /** Fields that belong to one occurrence and survive edits to the whole series. */
-const OCCURRENCE_FIELDS = new Set<keyof Event>(["id", "parentEventId", "date", "endDate", "isMultiDay", "recurrence", "grade"])
+const OCCURRENCE_FIELDS = new Set<keyof Event>(["id", "parentEventId", "date", "endDate", "isMultiDay", "recurrence", "grade", "gradeWeight", "gradeBonus"])
 
 const startTimeRank = (event: Event) => (event.isAllDay || !event.startTime ? "" : event.startTime)
 /** All-day and multi-day events first, then by start time. */
@@ -52,7 +52,7 @@ export function useTaskOperations(
   update: (producer: StateProducer) => void,
   recordChange: (state: AppState) => void,
 ) {
-  const { tasks, events, tags, subjects } = present
+  const { tasks, events, tags, subjects, timetable } = present
   const tasksByStatus = useMemo(
     () => ({
       todo: tasks.filter((task) => task.status === "todo"),
@@ -616,10 +616,11 @@ export function useTaskOperations(
       events,
       tags,
       subjects,
+      ...(timetable !== undefined && { timetable }),
       exportDate: new Date().toISOString(),
       version: "2.0",
     }
-  }, [tasks, events, tags, subjects])
+  }, [tasks, events, tags, subjects, timetable])
 
   const addTagToTask = useCallback(
     (taskId: string, tagId: string) => {

@@ -4,6 +4,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { useTaskOperations } = require('../hooks/use-task-operations.ts');
 const { createHistory, recordHistory, undoHistory, redoHistory } = require('../lib/tasks/history.ts');
+const { DEFAULT_TIMETABLE } = require('../lib/tasks/timetable.ts');
 
 const task = (id, fields = {}) => ({ id, title: id, description: '', status: 'todo', priority: 'medium', steps: [], tags: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...fields });
 const event = (id, fields = {}) => ({ id, title: id, description: '', date: '2026-01-05', isGraded: false, tags: [], ...fields });
@@ -34,6 +35,17 @@ test('history has bounded undo, preserves redo for no-ops and clears it for a ne
   const reset = createHistory(history.present);
   assert.equal(reset.present, history.present);
   assert.equal(reset.past.length + reset.future.length, 0);
+});
+
+test('a timetable-only edit is saved in history and can be undone and redone', () => {
+  const initial = state([task('a')]);
+  const timetable = { ...DEFAULT_TIMETABLE, updatedAt: '2026-11-25T16:00:00.000Z' };
+  const edited = { ...initial, timetable };
+  const history = recordHistory(createHistory(initial), edited);
+  assert.equal(history.present, edited);
+  const undone = undoHistory(history);
+  assert.equal(undone.present, initial);
+  assert.equal(redoHistory(undone).present, edited);
 });
 
 test('deleting a tag updates related tasks and events atomically and undo/redo restores all references', () => {

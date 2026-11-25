@@ -28,7 +28,7 @@ import { formDialogStyles } from "@/components/ui/form-dialog-styles"
 import { useTaskContext, type Event, type RecurrenceType } from "@/context/task-context"
 import { cn } from "@/lib/utils"
 import { MAX_OCCURRENCES } from "@/lib/tasks/recurrence"
-import { findSubjectInTitle, looksLikeExam } from "@/lib/tasks/subjects"
+import { findSubjectInTitle, looksLikeExam, parseBonusPoints } from "@/lib/tasks/subjects"
 import { addDays, format, isBefore, parseISO, startOfDay } from "date-fns"
 import { es } from "date-fns/locale"
 import { CalendarDays, CalendarIcon, Clock, Trash2 } from "lucide-react"
@@ -74,6 +74,7 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [titleError, setTitleError] = useState<string | null>(null)
+  const [gradeError, setGradeError] = useState(false)
   const [openDatePicker, setOpenDatePicker] = useState<"date" | "start" | "end" | "recurrenceEnd" | null>(null)
 
   const [title, setTitle] = useState(defaultValues?.title || "")
@@ -157,6 +158,7 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
     }
 
     setTitleError(null)
+    setGradeError(false)
     setTimeError(null)
     setOpenDatePicker(null)
     if (defaultValues) {
@@ -234,6 +236,11 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
     if (!normalizedTitle) {
       setTitleError("El título es obligatorio.")
       document.getElementById("event-title")?.focus()
+      return
+    }
+    if (isGraded && defaultValues?.gradeBonus && grade.trim() && parseBonusPoints(grade) === null) {
+      setGradeError(true)
+      document.getElementById("grade")?.focus()
       return
     }
 
@@ -569,14 +576,18 @@ export function EventDialog({ open, onOpenChange, defaultValues, mode = "create"
               </div>
               {isGraded && (
                 <div className="grid gap-2">
-                  <Label htmlFor="grade">Calificación</Label>
+                  <Label htmlFor="grade">{defaultValues?.gradeBonus ? "Puntos extra" : "Calificación"}</Label>
                   <Input
                     id="grade"
                     value={grade}
-                    onChange={(e) => setGrade(e.target.value)}
-                    placeholder="Ej: 8.5"
+                    onChange={(e) => { setGrade(e.target.value); setGradeError(false) }}
+                    inputMode={defaultValues?.gradeBonus ? "decimal" : undefined}
+                    placeholder={defaultValues?.gradeBonus ? "0,5" : "Ej: 8.5"}
+                    aria-invalid={gradeError}
+                    aria-describedby={gradeError ? "event-grade-error" : undefined}
                     className="glass-input"
                   />
+                  {gradeError && <p id="event-grade-error" className="text-xs text-destructive">Escribe los puntos extra como un número entre 0 y 10.</p>}
                 </div>
               )}
             </div>

@@ -6,6 +6,8 @@ Un tablero de tareas y un calendario en la misma app. Me la hice para llevar los
 
 Funciona en el navegador, sin cuenta y sin instalar nada. Si quieres, se sincroniza entre dispositivos.
 
+[Abrir Tasks](https://tasks-3-5.netlify.app/)
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/board.jpg" alt="Tablero con las columnas Por hacer, En progreso y Completadas"></td>
@@ -16,6 +18,16 @@ Funciona en el navegador, sin cuenta y sin instalar nada. Si quieres, se sincron
     <td align="center">Calendario</td>
   </tr>
 </table>
+
+## Novedades de la 3.5
+
+Estos son los cambios desde la 3.3.
+
+- **Horario de clases.** Actívalo en Configuración para consultar la semana de lunes a viernes. Puedes editar las franjas y los descansos o abrir una vista rápida por día desde la barra lateral.
+- **Notas por asignatura.** Pon pesos a los exámenes, añade notas sin crear un evento y suma puntos extra. Puedes ver la media calculada y la nota final de cada asignatura, así como la media del curso, y fijar a mano la nota final si hace falta.
+- **Notas pendientes.** El calendario señala los eventos evaluables que ya han terminado y siguen sin nota.
+- **Tablero y temporizador.** Las tarjetas son más compactas, el tablero responde más rápido y el temporizador conserva el tiempo de concentración de cada tarea aunque cambies a otra durante la sesión. Después de cuatro pomodoros toca un descanso largo.
+- **Copias y sincronización.** El horario y las notas nuevas se guardan con el resto de tus datos. Las copias anteriores se siguen pudiendo importar.
 
 ## Qué se puede hacer
 
@@ -39,7 +51,7 @@ Vista de mes y de semana. Los eventos pueden durar varios días o repetirse, y s
 
 ## Asignaturas
 
-Novedad de la 3.3. Son opcionales: se activan en Configuración y, si no las usas, no aparecen por ningún lado.
+Las asignaturas son opcionales y se activan en Configuración.
 
 Cada tarea o evento puede ir a una asignatura, y desde la barra lateral (o el selector de arriba en el móvil) se filtra todo para ver solo lo de una. Arriba aparece un resumen: si vas al día, cuántas tareas te quedan, lo próximo que tienes y tu media.
 
@@ -83,7 +95,7 @@ Se abre en [localhost:3000](http://localhost:3000) y funciona sin configurar nad
 
 Para la sincronización, copia `.env.example` a `.env.local`, pon los datos de tu proyecto de Supabase y sigue la [guía de configuración](docs/SUPABASE_SETUP.md).
 
-Para publicarla puedes usar Vercel o generar una versión estática con `npm run build:dist`. Está explicado en [Despliegue](docs/DEPLOY.md).
+La versión de producción se publica en Netlify. Los pasos están en [Despliegue](docs/DEPLOY.md).
 
 ## Desarrollo
 

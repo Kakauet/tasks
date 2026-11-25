@@ -4,6 +4,7 @@ import { track } from "@/lib/activity"
 import { useTaskContext, type Task, type Event as TaskEvent } from "@/context/task-context"
 import { useSubjectScope } from "@/context/subject-scope"
 import { SubjectScopeBar } from "@/components/subjects/subject-scope-bar"
+import { isGradePending } from "@/lib/tasks/subjects"
 import { cn } from "@/lib/utils"
 import { ViewToolbar } from "@/components/ui/view-toolbar"
 import { differenceInCalendarDays, format, isSameDay, isSameMonth, isToday, parseISO } from "date-fns"
@@ -29,6 +30,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import {
 EventDetail,
 MultiDayEvent,
+PendingGradeIndicator,
 SingleDayEvent,
 TaskDetail,
 TaskItem,
@@ -43,8 +45,9 @@ import { CalendarIcon, ChevronLeft, ChevronRight, Plus, PlusCircle } from "lucid
 
 export function CalendarView() {
   const { tasks: allTasks, events, tags, moveEvent, deleteEvent, undo, getEventsForDate: getAllEventsForDate } = useTaskContext()
-  const { scopeTasks, scopeEvents, eventColor, defaultSubjectId } = useSubjectScope()
+  const { scopeTasks, scopeEvents, eventColor, defaultSubjectId, today } = useSubjectScope()
   const tasks = useMemo(() => scopeTasks(allTasks), [scopeTasks, allTasks])
+  const pendingGrades = useMemo(() => new Set(events.filter((event) => isGradePending(event, today)).map((event) => event.id)), [events, today])
   // Un evento sin color propio se pinta con el de su asignatura; el dato guardado no cambia.
   const getEventsForDate = useCallback(
     (date: Date): TaskEvent[] => scopeEvents(getAllEventsForDate(date)).map((event) => {
@@ -270,6 +273,7 @@ export function CalendarView() {
                         anchorDate={format(day, "yyyy-MM-dd")}
                         onOpen={(selectedEvent) => handleRevealEvent(selectedEvent, day)}
                         actionLabel={`Ir a ${event.title} en eventos del día. Arrastrar para mover de fecha.`}
+                        gradePending={pendingGrades.has(event.id)}
                         className="calendar-mobile-event-pill cursor-grab active:cursor-grabbing"
                         style={{
                           backgroundColor: eventColor ? `${eventColor}20` : "hsl(var(--event-default) / 0.14)",
@@ -283,6 +287,7 @@ export function CalendarView() {
                       >
                         {/* Cells are narrow on phones: the title matters more than the time, shown in the day detail. */}
                         <span className="calendar-event-title-fade">{event.title}</span>
+                        {pendingGrades.has(event.id) && <PendingGradeIndicator className="size-2.5" />}
                       </CalendarEventDragSurface>
                     )
                   })}
@@ -316,7 +321,7 @@ export function CalendarView() {
                     <div className="flex flex-col gap-1">
                       {multiDayEvents.slice(0, 2).map((event) => {
                         const position = getMultiDayPosition(event, day)
-                        return <MultiDayEvent key={event.id} event={event} position={position} anchorDate={format(day, "yyyy-MM-dd")} onOpen={handleEditEvent} />
+                        return <MultiDayEvent key={event.id} event={event} position={position} anchorDate={format(day, "yyyy-MM-dd")} onOpen={handleEditEvent} gradePending={pendingGrades.has(event.id)} />
                       })}
                       {multiDayEvents.length > 2 && (
                         <div className="text-xs text-muted-foreground">+{multiDayEvents.length - 2} más</div>
@@ -328,7 +333,7 @@ export function CalendarView() {
                   {singleDayEvents.length > 0 && (
                     <div className="flex flex-col gap-1">
                       {singleDayEvents.slice(0, 2).map((event) => (
-                        <SingleDayEvent key={event.id} event={event} onOpen={handleEditEvent} />
+                        <SingleDayEvent key={event.id} event={event} onOpen={handleEditEvent} gradePending={pendingGrades.has(event.id)} />
                       ))}
                       {singleDayEvents.length > 2 && (
                         <div className="text-xs text-muted-foreground">+{singleDayEvents.length - 2} más</div>
@@ -354,6 +359,7 @@ export function CalendarView() {
     )
   }, [
     calendarDays,
+    pendingGrades,
     currentDate,
     selectedDate,
     getEventsForDate,
@@ -430,6 +436,7 @@ export function CalendarView() {
                     anchorDate={format(day, "yyyy-MM-dd")}
                     onOpen={isMobile ? (selectedEvent) => handleRevealEvent(selectedEvent, day) : handleEditEvent}
                     actionLabel={isMobile ? `Ir a ${event.title} en eventos del día. Arrastrar para mover de fecha.` : undefined}
+                    gradePending={pendingGrades.has(event.id)}
                     className="calendar-event card-hover-effect cursor-grab p-2 active:cursor-grabbing"
                     style={{
                       backgroundColor: event.color ? `${event.color}15` : "hsl(var(--event-default) / 0.12)",
@@ -440,13 +447,14 @@ export function CalendarView() {
                       }`,
                     }}
                   >
-                    <div className="flex min-w-0 items-center justify-between">
+                    <div className="flex min-w-0 items-center justify-between gap-2">
                       <span
                         className="calendar-event-title-fade text-[15px] font-semibold leading-tight"
                         style={{ color: event.color ?? "hsl(var(--event-default))" }}
                       >
                         {event.title}
                       </span>
+                      {pendingGrades.has(event.id) && <PendingGradeIndicator className="size-3.5" />}
                     </div>
                     {event.isMultiDay && event.endDate && (
                       <div className="text-xs flex items-center text-muted-foreground mt-1">
@@ -541,7 +549,7 @@ export function CalendarView() {
         })}
       </div>
     )
-  }, [weekDays, selectedDate, getEventsForDate, getTasksForDate, isSunday, handleEventDrop, handleEditEvent, handleRevealEvent, handleCreateEventForDate, isMobile, setSelectedDate])
+  }, [weekDays, selectedDate, getEventsForDate, getTasksForDate, isSunday, handleEventDrop, handleEditEvent, handleRevealEvent, handleCreateEventForDate, isMobile, setSelectedDate, pendingGrades])
 
   // Renderizado del panel lateral
   const renderSidebar = useCallback(() => {
@@ -574,6 +582,7 @@ export function CalendarView() {
                           tags={tags}
                           onOpen={handleEditEvent}
                           onDelete={setEventToDelete}
+                          gradePending={pendingGrades.has(event.id)}
                         />
                       </div>
                     ))}
@@ -605,7 +614,7 @@ export function CalendarView() {
         </CardContent>
       </Card>
     )
-  }, [selectedDate, selectedDateEvents, selectedDateTasks, tags, handleEditEvent, handleCreateEvent, setEventToDelete])
+  }, [selectedDate, selectedDateEvents, selectedDateTasks, tags, handleEditEvent, handleCreateEvent, setEventToDelete, pendingGrades])
 
   const periodLabel = view === "month"
     ? format(currentDate, "MMMM yyyy", { locale: es })

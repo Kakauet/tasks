@@ -1,10 +1,11 @@
 "use client"
 
-import { createContext, useContext, useMemo, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react"
 import { useTaskHistory } from "@/hooks/use-task-history"
 import { useTaskOperations, type SubjectDetection } from "@/hooks/use-task-operations"
 import { useTaskSync, type SyncState } from "@/hooks/use-task-sync"
 import type { Event, Subject, Task, TaskStatus, TaskStep, TaskTag } from "@/lib/tasks/types"
+import { parseTimetable, type Timetable, type TimetableDraft } from "@/lib/tasks/timetable"
 export type { SyncState, SyncStatus } from "@/hooks/use-task-sync"
 export type {
   AppState,
@@ -28,12 +29,15 @@ export interface TaskContextType {
   events: Event[]
   tags: TaskTag[]
   subjects: Subject[]
+  timetable?: Timetable | null
+  saveTimetable: (draft: TimetableDraft, original: Timetable | null | undefined) => boolean
   importData: (data: unknown) => void
   exportData: () => {
     tasks: Task[]
     events: Event[]
     tags: TaskTag[]
     subjects: Subject[]
+    timetable?: Timetable | null
     exportDate: string
     version: string
   }
@@ -79,7 +83,18 @@ const TaskContext = createContext<TaskContextType | undefined>(undefined)
 export function TaskProvider({ children }: { children: ReactNode }) {
   const { present, historyRef, resetState, update, recordChange, canUndo, canRedo, undo, redo } = useTaskHistory()
   const { isLoading, syncState, syncNow } = useTaskSync(present, historyRef, resetState)
-  const { tasks, events, tags, subjects } = present
+  const { tasks, events, tags, subjects, timetable } = present
+  const saveTimetable = useCallback((draft: TimetableDraft, original: Timetable | null | undefined) => {
+    const current = historyRef.current.present.timetable
+    // A sync may have updated this schedule while its editor was open.
+    if (JSON.stringify(current ?? null) !== JSON.stringify(original ?? null)) return false
+    const updatedAt = new Date(Math.max(Date.now(), current ? Date.parse(current.updatedAt) + 1 : 0)).toISOString()
+    const next = parseTimetable({ ...draft, updatedAt })
+    if (!next) return false
+    if (current && current.title === next.title && JSON.stringify(current.rows) === JSON.stringify(next.rows)) return true
+    update((state) => ({ ...state, timetable: next }))
+    return true
+  }, [historyRef, update])
   const {
     importData,
     exportData,
@@ -124,6 +139,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       events,
       tags,
       subjects,
+      timetable,
+      saveTimetable,
       importData,
       exportData,
       addTask,
@@ -169,6 +186,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       events,
       tags,
       subjects,
+      timetable,
+      saveTimetable,
       importData,
       exportData,
       addTask,

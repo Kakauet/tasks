@@ -38,11 +38,11 @@ const RECOVERY = "Copia de recuperación"
 
 export type DataDialogMode = "export" | "import" | null
 export function ImportExport({ mode, onModeChange, hideButtons = false }: { mode?: DataDialogMode; onModeChange?: (mode:DataDialogMode)=>void; hideButtons?:boolean }) {
-  const { tasks,events,tags,subjects,importData }=useTaskContext()
+  const { tasks,events,tags,subjects,timetable,importData }=useTaskContext()
   const [localMode,setLocalMode]=useState<DataDialogMode>(null)
   const activeMode=mode===undefined?localMode:mode
   const setMode=(value:DataDialogMode)=>{setLocalMode(value);onModeChange?.(value)}
-  const current=useMemo(()=>({tasks,events,tags,subjects}),[tasks,events,tags,subjects])
+  const current=useMemo(()=>({tasks,events,tags,subjects,timetable}),[tasks,events,tags,subjects,timetable])
   const latest=useRef(current);latest.current=current
   const request=useRef(0)
   const [busy,setBusy]=useState(false)
@@ -176,6 +176,7 @@ export function ImportExport({ mode, onModeChange, hideButtons = false }: { mode
             <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/45 p-3 text-center text-xs text-muted-foreground sm:grid-cols-4">
               {([["Tareas",preview.payload.data.tasks.length],["Eventos",preview.payload.data.events.length],["Etiquetas",preview.payload.data.tags.length],["Asignaturas",preview.payload.data.subjects?.length??0]] as const).map(([label,count])=><span key={label}><strong className="block text-base font-semibold tabular-nums text-foreground">{count}</strong>{label}</span>)}
             </div>
+            {preview.payload.data.timetable && <p className="text-sm text-muted-foreground">Horario incluido: {preview.payload.data.timetable.title}</p>}
             {preview.warnings.map(warning=><p key={warning} className="text-xs text-muted-foreground">{warning}</p>)}
             <fieldset><legend className="mb-2 text-sm font-medium">Cómo importar</legend>
               <div className="grid gap-2 sm:grid-cols-2">
