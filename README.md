@@ -1,88 +1,59 @@
 # TaskMaster
 
-[![CI](https://github.com/Kakauet/tasks/actions/workflows/ci.yml/badge.svg)](https://github.com/Kakauet/tasks/actions/workflows/ci.yml) [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/Kakauet/tasks/actions/workflows/ci.yml/badge.svg)](https://github.com/Kakauet/tasks/actions/workflows/ci.yml) [![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
 
-Un tablero de tareas y un calendario en la misma app. Me la hice para llevar los estudios: qué tengo pendiente, cuándo son las entregas y los exámenes, y cómo voy en cada asignatura.
+Hice TaskMaster para tener a mano las tareas, las entregas y las notas de cada asignatura. Funciona en el navegador y puedes empezar sin cuenta.
 
-Funciona en el navegador, sin cuenta y sin instalar nada. Si quieres, se sincroniza entre dispositivos.
+**[Abrir TaskMaster](https://tasks-3-5.netlify.app/)** · [Ver las novedades de la 3.5](https://github.com/Kakauet/tasks/releases/tag/v3.5.0)
 
-[Abrir Tasks](https://tasks-3-5.netlify.app/)
+![Tablero de TaskMaster con asignaturas en la barra lateral y tareas repartidas entre Por hacer, En progreso y Completadas](docs/screenshots/board.jpg)
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/board.jpg" alt="Tablero con las columnas Por hacer, En progreso y Completadas"></td>
-    <td width="50%"><img src="docs/screenshots/calendar-month.jpg" alt="Calendario mensual con exámenes y entregas"></td>
-  </tr>
-  <tr>
-    <td align="center">Tablero</td>
-    <td align="center">Calendario</td>
-  </tr>
-</table>
+## Tablero y calendario
 
-## Novedades de la 3.5
+**Tablero.** Arrastra las tareas entre columnas y divide las más largas en pasos. Puedes poner fechas límite y etiquetas, cambiar la prioridad desde la tarjeta y usar la búsqueda o los filtros para centrarte en lo que toca. Si te equivocas, puedes deshacer el cambio.
 
-Estos son los cambios desde la 3.3.
+**Calendario.** Mira las tareas con fecha y los eventos por mes o por semana. Los eventos se pueden arrastrar, repetir o extender a varios días. Cuando pasa un examen y aún no has puesto la nota, el calendario lo marca como pendiente.
 
-- **Horario de clases.** Actívalo en Configuración para consultar la semana de lunes a viernes. Puedes editar las franjas y los descansos o abrir una vista rápida por día desde la barra lateral.
-- **Notas por asignatura.** Pon pesos a los exámenes, añade notas sin crear un evento y suma puntos extra. Puedes ver la media calculada y la nota final de cada asignatura, así como la media del curso, y fijar a mano la nota final si hace falta.
-- **Notas pendientes.** El calendario señala los eventos evaluables que ya han terminado y siguen sin nota.
-- **Tablero y temporizador.** Las tarjetas son más compactas, el tablero responde más rápido y el temporizador conserva el tiempo de concentración de cada tarea aunque cambies a otra durante la sesión. Después de cuatro pomodoros toca un descanso largo.
-- **Copias y sincronización.** El horario y las notas nuevas se guardan con el resto de tus datos. Las copias anteriores se siguen pudiendo importar.
+![Calendario mensual en modo oscuro, con un evento de varios días, un examen pendiente de nota y el detalle de la fecha seleccionada](docs/screenshots/calendar-month.jpg)
 
-## Qué se puede hacer
+Para estudiar con el **Pomodoro**, abre el temporizador con `P` o desde **Herramientas**. Puedes usar ciclos de 25/5 o 50/10, y el tiempo de concentración se suma a la tarea en la que estabas trabajando. Pulsa `?` para ver el resto de los atajos.
 
-### Tablero
+## Asignaturas, horario y notas
 
-Tres columnas: por hacer, en progreso y completadas. Las tareas se arrastran de una a otra (también en el móvil), se ordenan por prioridad, fecha o nombre y se pueden dividir en pasos. La prioridad se cambia con un toque sobre los puntos de la tarjeta, sin abrirla.
+Activa **Asignaturas** en **Configuración** para filtrar tareas y eventos por materia. Al seleccionar una, verás qué te queda, qué viene después y cómo va tu media. Si el título menciona «Cálculo» o su apodo «Mates», la app puede hacer la asignación por ti. Puedes elegir cómo se calcula el estado «Al día» o marcarlo a mano.
 
-Cada tarea puede llevar fecha límite, etiquetas y descripción. Hay búsqueda, filtro por prioridad y acciones en bloque para mover o borrar varias a la vez.
+### Horario de clases
 
-### Calendario
+Activa **Horario** en **Configuración** para consultar las clases de lunes a viernes. Puedes editar las franjas y los descansos, y abrir la vista rápida por día desde la barra lateral.
 
-Vista de mes y de semana. Los eventos pueden durar varios días o repetirse, y se cambian de fecha arrastrándolos. Los exámenes y demás eventos evaluables guardan también la nota.
+![Horario semanal editable con las clases en colores por asignatura, un descanso común y el día actual resaltado](docs/screenshots/timetable.jpg)
 
-### Y además
+### Notas y medias
 
-- Pomodoro (25/5 o 50/10) que suma el tiempo de concentración a la tarea elegida; se abre desde Herramientas o con `P` y sigue contando aunque recargues la página.
-- Deshacer y rehacer cualquier cambio.
-- Atajos de teclado: `N` nueva tarea, `E` nuevo evento, `/` buscar, `P` pomodoro y `?` para ver el resto.
-- Modo claro y oscuro, con el color de acento a tu gusto.
-- Se puede añadir a la pantalla de inicio del móvil y usarla como una app más.
+En **Notas** puedes poner pesos a los exámenes, registrar trabajos sin crear un evento y sumar puntos extra. Verás la media calculada y la nota final de cada asignatura, además de la media del curso. También puedes fijar una nota final a mano.
 
-## Asignaturas
+<p align="center">
+  <img src="docs/screenshots/grades.jpg" width="560" alt="Diálogo de notas con la media del curso, el desglose de Cálculo, los porcentajes de cada prueba y los puntos extra">
+</p>
 
-Las asignaturas son opcionales y se activan en Configuración.
+## En el móvil
 
-Cada tarea o evento puede ir a una asignatura, y desde la barra lateral (o el selector de arriba en el móvil) se filtra todo para ver solo lo de una. Arriba aparece un resumen: si vas al día, cuántas tareas te quedan, lo próximo que tienes y tu media.
+El tablero muestra una columna cada vez y el horario enseña las clases del día que elijas. Puedes añadir TaskMaster a la pantalla de inicio y elegir el tema claro u oscuro desde **Configuración**.
 
-Casi nunca hace falta asignarlas a mano. Si el título lleva el nombre de la asignatura o uno de sus apodos («Filo» para Filosofía), va a esa asignatura, y si lleva «examen», cuenta como examen. Al crear una asignatura también recoge lo que ya tenías apuntado con ese nombre.
-
-Por defecto vas al día cuando no te quedan tareas de prioridad media o alta. Puedes cambiar el criterio o marcarlo tú con un toque en el estado.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/subjects.jpg" alt="Tablero filtrado por la asignatura Cálculo, con la barra lateral de asignaturas y el resumen arriba"></td>
-    <td width="50%"><img src="docs/screenshots/grades.jpg" alt="Diálogo de notas con la media general y la media de cada asignatura"></td>
-  </tr>
-  <tr>
-    <td align="center">Tablero filtrado por asignatura</td>
-    <td align="center">Notas y medias</td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/screenshots/mobile-board.jpg" width="280" alt="Tablero móvil en modo oscuro con el selector de columnas y los pasos de una tarea">
+  <img src="docs/screenshots/mobile-timetable.jpg" width="280" alt="Horario en móvil con el selector de días y las franjas del miércoles">
+</p>
 
 ## Tus datos
 
-Todo se guarda en tu navegador (IndexedDB). Para tener una copia aparte puedes exportar los datos a un archivo JSON y volver a importarlos cuando quieras, combinándolos con lo que ya tienes o sustituyéndolo. Antes de importar se guarda una copia de recuperación por si acaso.
+TaskMaster guarda los datos en tu navegador con IndexedDB. Puedes exportar una copia en JSON o JSON comprimido e importarla para combinarla con tus datos o reemplazarlos. Antes de importar, la app guarda una copia de recuperación. Las copias de versiones anteriores se siguen pudiendo abrir.
 
-La sincronización entre dispositivos es opcional y va con Supabase. Si dos dispositivos cambian cosas a la vez, se juntan los cambios de los dos en lugar de quedarse solo con el último.
+Si quieres usar los mismos datos en varios dispositivos, inicia sesión para activar la sincronización con Supabase. Cuando dos dispositivos cambian cosas a la vez, la app combina los cambios. [Datos y actividad](docs/DATA_AND_ACTIVITY.md)
 
-Las actualizaciones no tocan lo que ya tienes guardado: los datos y las copias de versiones anteriores se siguen cargando igual.
+## Probarlo en local
 
-Más detalles en [Datos y actividad](docs/DATA_AND_ACTIVITY.md).
-
-## Probarla en tu ordenador
-
-Necesitas Node.js 22 (la versión está en `.nvmrc`).
+Usa Node.js 22, la versión indicada en `.nvmrc`.
 
 ```bash
 git clone https://github.com/Kakauet/tasks.git
@@ -91,17 +62,11 @@ npm ci
 npm run dev
 ```
 
-Se abre en [localhost:3000](http://localhost:3000) y funciona sin configurar nada más.
-
-Para la sincronización, copia `.env.example` a `.env.local`, pon los datos de tu proyecto de Supabase y sigue la [guía de configuración](docs/SUPABASE_SETUP.md).
-
-La versión de producción se publica en Netlify. Los pasos están en [Despliegue](docs/DEPLOY.md).
+Abre [localhost:3000](http://localhost:3000). Para activar la sincronización en tu instalación, copia `.env.example` a `.env.local` y sigue la [guía de Supabase](docs/SUPABASE_SETUP.md).
 
 ## Desarrollo
 
-Next.js 14, React 18 y TypeScript, con Tailwind CSS y componentes de shadcn/ui.
-
-Antes de subir cambios conviene pasar las mismas comprobaciones que ejecuta GitHub Actions:
+El proyecto usa Next.js 14, React 18 y TypeScript, con Tailwind CSS y componentes de shadcn/ui. GitHub Actions ejecuta estas comprobaciones en los pull requests y al subir cambios a `main`.
 
 ```bash
 npm run typecheck
@@ -110,15 +75,9 @@ npm test
 npm run build
 ```
 
-Las pruebas no necesitan cuentas, credenciales ni navegador.
+[Guía de desarrollo](docs/DEVELOPMENT.md) · [Arquitectura](docs/ARCHITECTURE.md) · [Diseño](docs/DESIGN.md) · [Despliegue en Netlify](docs/DEPLOY.md)
 
-Documentación del proyecto:
-
-- [Desarrollo](docs/DEVELOPMENT.md): estructura del código y comandos.
-- [Arquitectura](docs/ARCHITECTURE.md): estado, historial, guardado y sincronización.
-- [Diseño](docs/DESIGN.md): colores, componentes y criterios de la interfaz.
-
-Si encuentras un fallo o se te ocurre algo, abre una issue. Ayuda mucho saber los pasos para reproducirlo y qué navegador usas.
+Si encuentras un fallo o tienes una idea, [abre una issue](https://github.com/Kakauet/tasks/issues/new). Si algo falla, indica qué estabas haciendo y qué navegador usas.
 
 ## Licencia
 
